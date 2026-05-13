@@ -2851,15 +2851,6 @@
      ES Module Import Map（CodeMirror 6 CDN 解決）
      Safari 17+ で import map をサポート。
      ============================================= -->
-<script type="importmap">
-{
-  "imports": {
-    "codemirror":            "https://esm.sh/codemirror@6.0.1?deps=@codemirror/state@6.4.1",
-    "@codemirror/state":     "https://esm.sh/@codemirror/state@6.4.1",
-    "@codemirror/lang-html": "https://esm.sh/@codemirror/lang-html@6.4.9?deps=@codemirror/state@6.4.1"
-  }
-}
-</script>
 
 <script type="module">
 /* =============================================
@@ -2998,9 +2989,8 @@ document.getElementById('login-google-btn').addEventListener('click', () => {
    - iPad 縦横レスポンシブ対応
    ============================================= */
 
-import { EditorView, basicSetup } from 'codemirror';
-import { EditorState }            from '@codemirror/state';
-import { html }                   from '@codemirror/lang-html';
+import { EditorView, EditorState, basicSetup } from 'https://esm.sh/codemirror@6.0.1';
+import { html }                               from 'https://esm.sh/@codemirror/lang-html@6.4.9';
 
 
 /* =============================================
