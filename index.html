@@ -2869,7 +2869,8 @@ import { initializeApp }
   from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
 import {
   getAuth, GoogleAuthProvider,
-  signInWithPopup, signOut, onAuthStateChanged
+  signInWithPopup, signInWithRedirect, getRedirectResult,
+  signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
 import { getDatabase, ref, get, set }
   from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
@@ -2944,12 +2945,44 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
+/* Safari / iOS はポップアップをブロックするため Redirect を使う */
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+              || /iPad|iPhone|iPod/.test(navigator.userAgent)
+              || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+/* ページロード時: Redirect ログイン後の結果を処理 */
+getRedirectResult(auth).then((result) => {
+  /* result が null のときは Redirect フローがなかっただけ（正常） */
+}).catch((err) => {
+  if (err.code !== 'auth/null-user') {
+    console.error('Redirect result error:', err);
+    alert('ログインに失敗しました: ' + (err.message || err.code));
+  }
+});
+
 /* Google Sign-In ボタン */
 document.getElementById('login-google-btn').addEventListener('click', () => {
-  signInWithPopup(auth, provider).catch((err) => {
-    console.error('Sign-in failed:', err);
-    alert('ログインに失敗しました。ブラウザのポップアップブロックを確認してください。');
-  });
+  const btn = document.getElementById('login-google-btn');
+  btn.disabled = true;
+  btn.textContent = 'ログイン中…';
+
+  if (isSafari) {
+    /* Safari / iOS: ページ遷移型ログイン */
+    signInWithRedirect(auth, provider).catch((err) => {
+      console.error('Redirect sign-in failed:', err);
+      btn.disabled = false;
+      btn.textContent = 'Googleアカウントでログイン';
+      alert('ログインに失敗しました: ' + (err.message || err.code));
+    });
+  } else {
+    /* Chrome / Firefox: ポップアップ型ログイン */
+    signInWithPopup(auth, provider).catch((err) => {
+      console.error('Popup sign-in failed:', err);
+      btn.disabled = false;
+      btn.textContent = 'Googleアカウントでログイン';
+      alert('ログインに失敗しました: ' + (err.message || err.code));
+    });
+  }
 });
 </script>
 
