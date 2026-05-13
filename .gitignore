@@ -1,0 +1,9 @@
+# Claude Code の作業ファイル
+.claude/
+
+# Word 文書（要件定義書の原本は必要に応じて含める）
+*.docx
+
+# OS 生成ファイル
+.DS_Store
+Thumbs.db

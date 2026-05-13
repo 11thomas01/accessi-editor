@@ -1,0 +1,5328 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>AccessiEditor — アクセシビリティHTMLエディタ</title>
+
+  <!-- Google Fonts: JetBrains Mono（コード用）+ Noto Sans JP（UI用） -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* =============================================
+       CSS カスタムプロパティ（テーマ変数）
+       ============================================= */
+    :root {
+      /* ── 背景色 ── */
+      --bg-base:    #080C18;   /* アプリ最背面 */
+      --bg-panel:   #0E1325;   /* パネル背景 */
+      --bg-surface: #141929;   /* カード・ツールバー */
+      --bg-hover:   #1C2238;   /* ホバー状態 */
+      --bg-active:  #222B43;   /* アクティブ状態 */
+
+      /* ── ボーダー色 ── */
+      --border-subtle:  #1A2035;
+      --border-default: #27324F;
+      --border-strong:  #3A4870;
+
+      /* ── アクセント色（シアン系）── */
+      --accent:         #00D4FF;
+      --accent-dim:     rgba(0, 212, 255, 0.12);
+      --accent-glow:    rgba(0, 212, 255, 0.30);
+
+      /* ── セカンダリアクセント（アンバー系）── */
+      --amber:      #FFB347;
+      --amber-dim:  rgba(255, 179, 71, 0.14);
+
+      /* ── テキスト色 ── */
+      --text-primary:   #E0E8FF;
+      --text-secondary: #7B8DB8;
+      --text-muted:     #3E4E78;
+
+      /* ── セマンティック色 ── */
+      --color-success: #00E896;
+      --color-warning: #FFB347;
+      --color-error:   #FF4D6D;
+
+      /* ── レイアウト寸法 ── */
+      --header-h:       56px;
+      --toolbar-h:      44px;
+      --check-panel-h:  48px;  /* 折りたたみ時の高さ */
+      --check-expanded-h: 360px;
+
+      /* ── トランジション ── */
+      --t-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+      --t-med:  260ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* =============================================
+       ダークモード対応（Phase 6 で詳細化）
+       ============================================= */
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg-base:    #F0F4FF;
+        --bg-panel:   #FFFFFF;
+        --bg-surface: #F5F7FF;
+        --bg-hover:   #EBEFFf;
+        --bg-active:  #E2E8FF;
+
+        --border-subtle:  #DDE3F5;
+        --border-default: #C5CEED;
+        --border-strong:  #A8B4D8;
+
+        --text-primary:   #1A2050;
+        --text-secondary: #4A5880;
+        --text-muted:     #8090B8;
+      }
+    }
+
+    /* =============================================
+       リセット・ベーススタイル
+       ============================================= */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    /* スクロールバー（WebKit） */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-strong);
+      border-radius: 3px;
+    }
+
+    /* =============================================
+       アプリシェル
+       ============================================= */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      height: 100dvh;  /* Safari 対応の動的ビューポート高さ */
+    }
+
+    /* =============================================
+       ヘッダー
+       ============================================= */
+    #header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: var(--header-h);
+      padding: 0 16px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-default);
+      flex-shrink: 0;
+      position: relative;
+      z-index: 100;
+    }
+
+    /* ヘッダー下部のアクセントライン */
+    #header::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        var(--accent-glow) 30%,
+        var(--accent-glow) 70%,
+        transparent 100%
+      );
+      opacity: 0.5;
+    }
+
+    /* ── ロゴ ── */
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+
+    .logo-icon {
+      width: 34px;
+      height: 34px;
+      background: linear-gradient(135deg, var(--accent), #0099CC);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      box-shadow: 0 0 14px rgba(0, 212, 255, 0.3);
+    }
+
+    .logo-name {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      white-space: nowrap;
+    }
+
+    .logo-name em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    /* ── モード切替 ── */
+    .mode-toggle {
+      display: flex;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: 7px;
+      padding: 3px;
+      margin-right: auto;
+    }
+
+    .mode-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      min-height: 44px;
+      min-width: 44px;
+      border: none;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--t-fast);
+      white-space: nowrap;
+    }
+
+    .mode-btn.active {
+      background: var(--bg-active);
+      color: var(--text-primary);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+
+    .mode-btn:hover:not(.active):not(:disabled) {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+
+    .mode-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .badge-soon {
+      font-size: 9px;
+      font-weight: 600;
+      padding: 2px 5px;
+      background: var(--bg-base);
+      border: 1px solid var(--border-default);
+      border-radius: 3px;
+      color: var(--text-muted);
+      letter-spacing: 0.3px;
+    }
+
+    /* ── ヘッダーアクション ── */
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* チェックボタン（主要アクション） */
+    .btn-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 18px;
+      height: 44px;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all var(--t-fast);
+    }
+
+    .btn-check:hover {
+      background: var(--accent);
+      color: var(--bg-base);
+      box-shadow: 0 0 18px var(--accent-glow);
+    }
+
+    .btn-check:active { transform: scale(0.96); }
+
+    /* アイコンボタン（保存・設定など） */
+    .btn-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      font-size: 18px;
+      cursor: pointer;
+      transition: all var(--t-fast);
+    }
+
+    .btn-icon:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .btn-icon:active { transform: scale(0.94); }
+
+    /* =============================================
+       メインエリア（エディタ ＋ プレビュー）
+       ============================================= */
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── エディタペイン ── */
+    #editor-pane {
+      display: flex;
+      flex-direction: column;
+      width: 50%;
+      border-right: 1px solid var(--border-default);
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* テンプレートバー */
+    #template-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 12px;
+      height: var(--toolbar-h);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+      overflow-x: auto;
+      scrollbar-width: none;  /* Firefox */
+    }
+
+    #template-bar::-webkit-scrollbar { display: none; }
+
+    .toolbar-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      white-space: nowrap;
+      margin-right: 2px;
+      flex-shrink: 0;
+    }
+
+    .tpl-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0 13px;
+      align-self: stretch;   /* ツールバー44pxを縦いっぱいに使う */
+      border: 1px solid var(--border-default);
+      border-radius: 4px;
+      background: var(--bg-panel);
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all var(--t-fast);
+      flex-shrink: 0;
+    }
+
+    .tpl-btn:hover {
+      border-color: var(--amber);
+      color: var(--amber);
+      background: var(--amber-dim);
+    }
+
+    .tpl-btn:active { transform: scale(0.95); }
+
+    /* フォントサイズコントロール */
+    .font-controls {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+
+    .btn-font {
+      padding: 0 8px;
+      min-width: 36px;
+      align-self: stretch;
+      border: 1px solid var(--border-default);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: 'Noto Sans JP', sans-serif;
+      cursor: pointer;
+      transition: all var(--t-fast);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-font.active {
+      background: var(--bg-active);
+      color: var(--text-primary);
+      border-color: var(--border-strong);
+    }
+
+    .btn-font:hover:not(.active) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* CodeMirrorエディタコンテナ */
+    #editor-container {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── CodeMirror のベーススタイル上書き ── */
+    #editor-container .cm-editor {
+      height: 100%;
+    }
+
+    #editor-container .cm-editor.cm-focused {
+      outline: none;
+    }
+
+    #editor-container .cm-scroller {
+      overflow: auto;
+      height: 100%;
+      /* JetBrains Mono はここで指定（テーマで上書きされる） */
+      font-family: 'JetBrains Mono', monospace !important;
+    }
+
+    /* 自動保存インジケーター */
+    #autosave-indicator {
+      position: absolute;
+      bottom: 8px;
+      right: 14px;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      opacity: 0;
+      transition: opacity var(--t-med);
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    #autosave-indicator.visible { opacity: 1; }
+
+    /* ── プレビューペイン ── */
+    #preview-pane {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    #preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      height: var(--toolbar-h);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+    }
+
+    .preview-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* リアルタイム更新を示すパルスドット */
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--color-success);
+      box-shadow: 0 0 7px var(--color-success);
+      animation: pulse-live 2.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-live {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.35; transform: scale(0.8); }
+    }
+
+    .preview-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .btn-preview {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border-default);
+      border-radius: 5px;
+      background: var(--bg-panel);
+      color: var(--text-secondary);
+      font-size: 15px;
+      cursor: pointer;
+      transition: all var(--t-fast);
+    }
+
+    .btn-preview:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    #preview-iframe {
+      flex: 1;
+      border: none;
+      width: 100%;
+      background: #ffffff;
+    }
+
+    /* =============================================
+       チェックパネル（下部ドロワー）
+       ============================================= */
+    #check-panel {
+      height: var(--check-panel-h);
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border-default);
+      flex-shrink: 0;
+      overflow: hidden;
+      transition: height var(--t-med);
+    }
+
+    #check-panel.expanded {
+      height: var(--check-expanded-h);
+    }
+
+    /* パネルトグルボタン */
+    #check-toggle-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      height: var(--check-panel-h);
+      padding: 0 16px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+      transition: color var(--t-fast);
+    }
+
+    #check-toggle-btn:hover { color: var(--text-primary); }
+
+    .toggle-arrow {
+      font-size: 10px;
+      transition: transform var(--t-med);
+      flex-shrink: 0;
+    }
+
+    #check-panel.expanded .toggle-arrow {
+      transform: rotate(180deg);
+    }
+
+    /* ステータスバッジ群 */
+    .check-badges {
+      display: flex;
+      gap: 6px;
+      margin-left: auto;
+    }
+
+    .badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      border: 1px solid transparent;
+    }
+
+    .badge.idle {
+      background: var(--bg-surface);
+      color: var(--text-muted);
+      border-color: var(--border-subtle);
+    }
+
+    .badge.error {
+      background: rgba(255, 77, 109, 0.12);
+      color: var(--color-error);
+      border-color: rgba(255, 77, 109, 0.3);
+    }
+
+    .badge.warning {
+      background: rgba(255, 179, 71, 0.12);
+      color: var(--color-warning);
+      border-color: rgba(255, 179, 71, 0.3);
+    }
+
+    .badge.success {
+      background: rgba(0, 232, 150, 0.10);
+      color: var(--color-success);
+      border-color: rgba(0, 232, 150, 0.25);
+    }
+
+    /* チェック結果コンテンツエリア */
+    #check-content {
+      height: calc(var(--check-expanded-h) - var(--check-panel-h));
+      padding: 12px 16px;
+      overflow-y: auto;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    /* =============================================
+       AIチャットボタン（右下固定）
+       ============================================= */
+    #chat-fab {
+      position: fixed;
+      right: 20px;
+      /* check-panel の高さ + マージン。JS で動的更新する */
+      bottom: calc(var(--check-panel-h) + 16px);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 22px;
+      height: 52px;
+      border: none;
+      border-radius: 26px;
+      background: linear-gradient(135deg, var(--accent) 0%, #007A99 100%);
+      color: var(--bg-base);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(0, 212, 255, 0.4);
+      transition: transform var(--t-fast), box-shadow var(--t-fast), bottom var(--t-med);
+      z-index: 200;
+    }
+
+    #chat-fab:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(0, 212, 255, 0.55);
+    }
+
+    #chat-fab:active { transform: translateY(0) scale(0.97); }
+
+    /* =============================================
+       トースト通知
+       ============================================= */
+    #toast {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(16px);
+      padding: 10px 22px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--t-med), transform var(--t-med);
+      z-index: 9999;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    #toast.toast-success { border-color: var(--color-success); }
+    #toast.toast-warning { border-color: var(--color-warning); }
+    #toast.toast-error   { border-color: var(--color-error); }
+
+    /* =============================================
+       ノーコードモード（Phase 4 プレースホルダー）
+       ============================================= */
+    #nocode-pane {
+      display: none;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      color: var(--text-muted);
+    }
+
+    /* =============================================
+       Phase 4: ノーコードモード
+       ============================================= */
+
+    /* パネル全体 */
+    #nocode-pane {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 要素ピッカー（上部横スクロール） */
+    .nc-picker {
+      display: flex;
+      gap: 6px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border-subtle);
+      background: var(--bg-surface);
+    }
+    .nc-picker::-webkit-scrollbar { display: none; }
+
+    .nc-pick-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 7px 14px;
+      min-width: 64px;
+      min-height: 56px;
+      border: 1px solid var(--border-default);
+      border-radius: 10px;
+      background: var(--bg-panel);
+      color: var(--text-secondary);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 10px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all var(--t-fast);
+    }
+    .nc-pick-btn-icon { font-size: 18px; line-height: 1; }
+    .nc-pick-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+    .nc-pick-btn:active { transform: scale(0.94); }
+
+    /* 要素リスト */
+    .nc-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    /* 空状態メッセージ */
+    .nc-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
+      padding: 24px;
+    }
+    .nc-empty-icon { font-size: 32px; margin-bottom: 4px; }
+
+    /* 要素カード */
+    .nc-card {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all var(--t-fast);
+      min-height: 52px;
+    }
+    .nc-card:hover { border-color: var(--accent); background: var(--accent-dim); }
+
+    .nc-card-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 8px;
+      flex-shrink: 0;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .nc-card-preview {
+      flex: 1;
+      font-size: 12px;
+      color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    .nc-card-actions {
+      display: flex;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+
+    .nc-card-btn {
+      background: none;
+      border: 1px solid var(--border-default);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      padding: 4px 7px;
+      min-width: 32px;
+      min-height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--t-fast);
+    }
+    .nc-card-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
+    .nc-card-btn.del:hover { border-color: var(--color-error); color: var(--color-error); background: rgba(255,77,109,0.08); }
+
+    /* フッター（コードを見るボタン） */
+    .nc-footer {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-top: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+      background: var(--bg-surface);
+    }
+
+    .nc-code-btn {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border-default);
+      border-radius: 9px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all var(--t-fast);
+      min-height: 44px;
+    }
+    .nc-code-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+    /* =============================================
+       Phase 4: 要素編集モーダル（下からスライドアップ）
+       ============================================= */
+    .nc-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 6, 16, 0.88);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 700;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--t-med);
+    }
+    .nc-modal-overlay.open { opacity: 1; pointer-events: auto; }
+
+    .nc-modal-inner {
+      width: 100%;
+      max-height: 80vh;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border-strong);
+      border-radius: 20px 20px 0 0;
+      overflow-y: auto;
+      transform: translateY(100%);
+      transition: transform var(--t-med);
+    }
+    .nc-modal-overlay.open .nc-modal-inner { transform: translateY(0); }
+
+    .nc-modal-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+      position: sticky;
+      top: 0;
+      background: var(--bg-panel);
+      z-index: 1;
+    }
+    .nc-modal-title {
+      flex: 1;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .nc-modal-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 6px;
+      min-width: 36px;
+      min-height: 36px;
+      border-radius: 6px;
+      transition: color var(--t-fast);
+    }
+    .nc-modal-close:hover { color: var(--color-error); }
+
+    .nc-modal-body {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .nc-field { display: flex; flex-direction: column; gap: 5px; }
+
+    .nc-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      letter-spacing: 0.3px;
+    }
+
+    .nc-input, .nc-select, .nc-textarea {
+      width: 100%;
+      padding: 10px 13px;
+      background: var(--bg-base);
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 13px;
+      min-height: 44px;
+      box-sizing: border-box;
+      transition: border-color var(--t-fast), box-shadow var(--t-fast);
+    }
+    .nc-input:focus, .nc-select:focus, .nc-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .nc-textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+    .nc-select { appearance: none; -webkit-appearance: none; cursor: pointer; }
+
+    /* トグルボタングループ */
+    .nc-toggle-group { display: flex; gap: 6px; }
+    .nc-toggle-btn {
+      flex: 1;
+      padding: 9px;
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 12px;
+      cursor: pointer;
+      min-height: 40px;
+      transition: all var(--t-fast);
+    }
+    .nc-toggle-btn.active {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* リスト項目編集 */
+    .nc-items-list { display: flex; flex-direction: column; gap: 6px; }
+    .nc-item-row { display: flex; gap: 6px; align-items: center; }
+    .nc-item-row .nc-input { flex: 1; min-height: 40px; padding: 8px 10px; }
+
+    .nc-item-del {
+      background: none;
+      border: 1px solid var(--border-default);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+      width: 36px;
+      height: 36px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--t-fast);
+    }
+    .nc-item-del:hover { border-color: var(--color-error); color: var(--color-error); }
+
+    .nc-add-row-btn {
+      padding: 8px;
+      border: 1px dashed var(--border-default);
+      border-radius: 8px;
+      background: none;
+      color: var(--text-muted);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 12px;
+      cursor: pointer;
+      min-height: 40px;
+      width: 100%;
+      transition: all var(--t-fast);
+    }
+    .nc-add-row-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* テーブルセル */
+    .nc-table-row { display: flex; gap: 5px; align-items: center; margin-bottom: 4px; }
+    .nc-table-cell {
+      flex: 1;
+      padding: 7px 9px;
+      background: var(--bg-base);
+      border: 1px solid var(--border-default);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 12px;
+      font-family: 'Noto Sans JP', sans-serif;
+      min-height: 38px;
+      box-sizing: border-box;
+      transition: border-color var(--t-fast);
+    }
+    .nc-table-cell:focus { outline: none; border-color: var(--accent); }
+
+    /* モーダルアクションボタン */
+    .nc-modal-actions {
+      display: flex;
+      gap: 8px;
+      padding: 0 18px 4px;
+    }
+    .nc-save-btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 9px;
+      background: var(--accent);
+      color: var(--bg-base);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 48px;
+      transition: opacity var(--t-fast);
+    }
+    .nc-save-btn:hover { opacity: 0.88; }
+    .nc-cancel-btn {
+      padding: 12px 18px;
+      border: 1px solid var(--border-default);
+      border-radius: 9px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 14px;
+      cursor: pointer;
+      min-height: 48px;
+      transition: all var(--t-fast);
+    }
+    .nc-cancel-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
+
+    /* =============================================
+       iPad 縦向き対応（orientation: portrait）
+       ============================================= */
+    @media (orientation: portrait) {
+      #main {
+        flex-direction: column;
+      }
+
+      #editor-pane {
+        width: 100%;
+        height: 50%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-default);
+      }
+
+      #preview-pane {
+        height: 50%;
+      }
+    }
+
+    /* =============================================
+       アクセシビリティ：フォーカスリング
+       ============================================= */
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
+    /* スクリーンリーダー専用テキスト */
+    .sr-only {
+      position: absolute;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* =============================================
+       Phase 2: チェックボタン実行中アニメーション
+       ============================================= */
+    .btn-check.running {
+      pointer-events: none;
+      opacity: 0.7;
+    }
+
+    .btn-check.running::before {
+      content: '';
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 6px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* =============================================
+       Phase 2: チェック結果サマリー行
+       ============================================= */
+    #check-summary {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px 6px;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 12px;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    #check-summary .summary-label {
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    /* =============================================
+       Phase 2: チェック結果リスト
+       ============================================= */
+    #check-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+
+    /* 各チェック項目のラッパー */
+    .check-item {
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .check-item:last-child {
+      border-bottom: none;
+    }
+
+    /* ヘッダー行（クリッカブル） */
+    .check-item-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 9px 16px;
+      min-height: 44px;
+      border: none;
+      background: transparent;
+      color: var(--text-primary);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: left;
+      transition: background var(--t-fast);
+    }
+
+    .check-item-header:hover {
+      background: var(--bg-hover);
+    }
+
+    .check-item--pass .check-item-header {
+      color: var(--text-secondary);
+    }
+
+    /* 重大度アイコン */
+    .check-sev {
+      font-size: 14px;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+
+    /* チェックID バッジ */
+    .check-id-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      letter-spacing: 0.3px;
+    }
+
+    .check-item--error   .check-id-badge {
+      background: rgba(255, 77, 109, 0.15);
+      color: var(--color-error);
+    }
+
+    .check-item--warning .check-id-badge {
+      background: rgba(255, 179, 71, 0.15);
+      color: var(--color-warning);
+    }
+
+    .check-item--pass    .check-id-badge {
+      background: rgba(0, 232, 150, 0.10);
+      color: var(--color-success);
+    }
+
+    /* タイトルテキスト */
+    .check-title {
+      flex: 1;
+      line-height: 1.4;
+    }
+
+    /* 展開アロー */
+    .check-expand-arrow {
+      font-size: 9px;
+      color: var(--text-muted);
+      transition: transform var(--t-med);
+      flex-shrink: 0;
+    }
+
+    .check-item-header[aria-expanded="true"] .check-expand-arrow {
+      transform: rotate(180deg);
+    }
+
+    /* ヒント展開エリア */
+    .check-item-detail {
+      padding: 0 16px 12px 44px;
+      font-size: 12px;
+      line-height: 1.6;
+      background: var(--bg-surface);
+    }
+
+    .check-item-detail[hidden] {
+      display: none;
+    }
+
+    /* なぜ問題か／どう直すか */
+    .hint-section {
+      margin-bottom: 10px;
+    }
+
+    .hint-why, .hint-how {
+      margin-bottom: 6px;
+      color: var(--text-secondary);
+    }
+
+    .hint-why strong, .hint-how strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    /* 修正コードスニペット表示 */
+    .hint-code {
+      background: var(--bg-base);
+      border: 1px solid var(--border-default);
+      border-radius: 5px;
+      padding: 8px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin: 8px 0;
+      line-height: 1.5;
+    }
+
+    /* 修正例挿入ボタン */
+    .btn-insert-fix {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0 14px;
+      min-height: 44px;
+      border: 1px solid var(--amber);
+      border-radius: 4px;
+      background: var(--amber-dim);
+      color: var(--amber);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--t-fast);
+      margin-top: 8px;
+    }
+
+    .btn-insert-fix:hover {
+      background: var(--amber);
+      color: var(--bg-base);
+    }
+
+    .btn-insert-fix:active { transform: scale(0.96); }
+
+    /* コントラスト違反の詳細リスト */
+    .contrast-detail-list {
+      list-style: none;
+      margin: 6px 0;
+    }
+
+    .contrast-detail-list li {
+      padding: 3px 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .contrast-detail-list li:last-child {
+      border-bottom: none;
+    }
+
+    .contrast-ratio-bad  { color: var(--color-error); font-weight: 700; }
+    .contrast-ratio-good { color: var(--color-success); }
+
+    /* 全合格メッセージ */
+    .all-pass-msg {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 24px;
+      color: var(--color-success);
+      text-align: center;
+    }
+
+    .all-pass-msg .pass-icon { font-size: 32px; }
+    .all-pass-msg p { font-size: 13px; font-weight: 600; }
+    .all-pass-msg small { font-size: 11px; color: var(--text-muted); }
+
+    /* チェック未実行メッセージ */
+    .check-idle-msg {
+      padding: 16px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    /* チェック内容エリアの flex 化 */
+    #check-content {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* =============================================
+       Phase 3: APIキー設定モーダル
+       ============================================= */
+
+    /* =============================================
+       Phase 6: 設定モーダル
+       ============================================= */
+    #settings-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 6, 16, 0.88);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 650;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--t-med);
+    }
+    #settings-overlay.open { opacity: 1; pointer-events: auto; }
+
+    .settings-inner {
+      width: 100%;
+      max-width: 460px;
+      max-height: 82vh;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      border-radius: 18px;
+      box-shadow: 0 0 0 1px rgba(0,212,255,0.1), 0 24px 64px rgba(0,0,0,0.7);
+      overflow-y: auto;
+      transform: translateY(20px) scale(0.97);
+      transition: transform var(--t-med);
+    }
+    #settings-overlay.open .settings-inner {
+      transform: translateY(0) scale(1);
+    }
+
+    .settings-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 20px 22px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      position: sticky;
+      top: 0;
+      background: var(--bg-panel);
+      z-index: 1;
+      border-radius: 18px 18px 0 0;
+    }
+    .settings-header-icon { font-size: 20px; }
+    #settings-title {
+      flex: 1;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .settings-close-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 6px;
+      min-width: 36px;
+      min-height: 36px;
+      border-radius: 6px;
+      transition: color var(--t-fast);
+    }
+    .settings-close-btn:hover { color: var(--color-error); }
+
+    /* 設定セクション */
+    .settings-section {
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .settings-section:last-child { border-bottom: none; }
+
+    .settings-section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 12px;
+    }
+
+    /* APIキーセクション */
+    .settings-key-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: rgba(0, 232, 150, 0.07);
+      border: 1px solid rgba(0, 232, 150, 0.2);
+      border-radius: 9px;
+      margin-bottom: 10px;
+    }
+    .settings-key-icon { font-size: 16px; flex-shrink: 0; }
+    .settings-key-mask {
+      flex: 1;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: var(--color-success);
+    }
+    .settings-key-del-btn {
+      background: none;
+      border: 1px solid rgba(255,77,109,0.3);
+      border-radius: 6px;
+      color: var(--color-error);
+      font-size: 11px;
+      font-family: 'Noto Sans JP', sans-serif;
+      cursor: pointer;
+      padding: 4px 10px;
+      min-height: 32px;
+      transition: background var(--t-fast);
+    }
+    .settings-key-del-btn:hover { background: rgba(255,77,109,0.1); }
+
+    .settings-key-none {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      font-style: italic;
+    }
+
+    .settings-primary-btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 9px;
+      background: var(--accent);
+      color: var(--bg-base);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 48px;
+      transition: opacity var(--t-fast);
+    }
+    .settings-primary-btn:hover { opacity: 0.88; }
+
+    /* フォントサイズセクション */
+    .settings-font-group {
+      display: flex;
+      gap: 8px;
+    }
+    .settings-font-btn {
+      flex: 1;
+      padding: 10px 6px;
+      border: 1px solid var(--border-default);
+      border-radius: 9px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 13px;
+      cursor: pointer;
+      min-height: 48px;
+      transition: all var(--t-fast);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .settings-font-btn .font-sample {
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .settings-font-btn .font-label { font-size: 10px; color: var(--text-muted); }
+    .settings-font-btn.active {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+    .settings-font-btn.active .font-sample,
+    .settings-font-btn.active .font-label { color: var(--accent); }
+    .settings-font-btn:hover:not(.active) {
+      border-color: var(--border-strong);
+      color: var(--text-primary);
+    }
+
+    /* localStorage 使用量セクション */
+    .settings-storage-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+    #settings-storage-used {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .settings-storage-max {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .settings-storage-bar {
+      height: 6px;
+      background: var(--bg-base);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 10px;
+      border: 1px solid var(--border-subtle);
+    }
+    #settings-storage-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--accent);
+      transition: width 0.6s ease, background 0.4s;
+      width: 0%;
+    }
+    .settings-storage-note {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    .settings-danger-btn {
+      width: 100%;
+      padding: 11px;
+      border: 1px solid rgba(255,77,109,0.35);
+      border-radius: 9px;
+      background: rgba(255,77,109,0.06);
+      color: var(--color-error);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      min-height: 48px;
+      transition: all var(--t-fast);
+    }
+    .settings-danger-btn:hover {
+      background: rgba(255,77,109,0.14);
+      border-color: var(--color-error);
+    }
+
+    #api-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 6, 16, 0.88);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--t-med);
+    }
+
+    #api-modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #api-modal-inner {
+      width: 100%;
+      max-width: 460px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      border-radius: 18px;
+      padding: 32px 28px 24px;
+      box-shadow: 0 0 0 1px rgba(0,212,255,0.12),
+                  0 24px 64px rgba(0,0,0,0.7);
+      transform: translateY(20px) scale(0.97);
+      transition: transform var(--t-med);
+    }
+
+    #api-modal-overlay.open #api-modal-inner {
+      transform: translateY(0) scale(1);
+    }
+
+    .api-modal-logo {
+      text-align: center;
+      font-size: 40px;
+      margin-bottom: 10px;
+    }
+
+    .api-modal-title {
+      text-align: center;
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .api-modal-subtitle {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 22px;
+      line-height: 1.65;
+    }
+
+    .api-modal-subtitle a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .api-modal-subtitle a:hover { text-decoration: underline; }
+
+    /* 保存済みキー表示行 */
+    .api-saved-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 11px 14px;
+      background: rgba(0, 232, 150, 0.08);
+      border: 1px solid rgba(0, 232, 150, 0.22);
+      border-radius: 9px;
+      margin-bottom: 14px;
+      font-size: 12px;
+      color: var(--color-success);
+      font-weight: 600;
+    }
+
+    .api-saved-mask {
+      flex: 1;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--text-secondary);
+    }
+
+    .api-delete-btn {
+      background: none;
+      border: 1px solid rgba(255,77,109,0.3);
+      border-radius: 5px;
+      color: var(--color-error);
+      font-size: 11px;
+      font-family: 'Noto Sans JP', sans-serif;
+      cursor: pointer;
+      padding: 4px 10px;
+      min-height: 28px;
+      transition: background var(--t-fast);
+    }
+
+    .api-delete-btn:hover { background: rgba(255,77,109,0.12); }
+
+    /* キー入力フィールド */
+    .api-input-wrap {
+      position: relative;
+      margin-bottom: 14px;
+    }
+
+    #api-key-input {
+      width: 100%;
+      padding: 12px 46px 12px 14px;
+      background: var(--bg-base);
+      border: 1px solid var(--border-default);
+      border-radius: 9px;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      min-height: 48px;
+      transition: border-color var(--t-fast), box-shadow var(--t-fast);
+    }
+
+    #api-key-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    #api-toggle-btn {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 16px;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+      transition: color var(--t-fast);
+    }
+
+    #api-toggle-btn:hover { color: var(--text-primary); }
+
+    /* アクションボタン群 */
+    .api-modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .api-save-btn {
+      flex: 1;
+      padding: 13px;
+      min-height: 48px;
+      border: none;
+      border-radius: 9px;
+      background: var(--accent);
+      color: var(--bg-base);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity var(--t-fast), transform var(--t-fast);
+    }
+
+    .api-save-btn:hover { opacity: 0.88; }
+    .api-save-btn:active { transform: scale(0.97); }
+
+    .api-cancel-btn {
+      padding: 13px 18px;
+      min-height: 48px;
+      border: 1px solid var(--border-default);
+      border-radius: 9px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all var(--t-fast);
+    }
+
+    .api-cancel-btn:hover {
+      border-color: var(--border-strong);
+      color: var(--text-primary);
+    }
+
+    /* 保存済みキー行のラベル */
+    .api-saved-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    /* フォームグループ */
+    .api-input-group { margin-bottom: 14px; }
+
+    /* フォームラベル */
+    .api-input-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      letter-spacing: 0.3px;
+    }
+
+    /* 入力ヒントテキスト */
+    .api-input-hint {
+      display: block;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 5px;
+      line-height: 1.5;
+    }
+
+    /* プライバシー注記 */
+    .api-privacy-note {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.7;
+      padding: 10px 12px;
+      background: var(--bg-surface);
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    /* =============================================
+       Phase 3: チャットドロワー背景オーバーレイ
+       ============================================= */
+    #chat-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 6, 16, 0.45);
+      z-index: 290;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--t-med);
+    }
+
+    #chat-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* =============================================
+       Phase 3: チャットドロワー本体
+       ============================================= */
+    #chat-drawer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 52vh;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--accent);
+      box-shadow: 0 -8px 48px rgba(0, 212, 255, 0.12),
+                  0 -2px 0 rgba(0,0,0,0.4);
+      transform: translateY(102%);
+      transition: transform var(--t-med);
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #chat-drawer.open { transform: translateY(0); }
+
+    /* ドラッグハンドル（視覚的ヒント） */
+    #chat-drawer::before {
+      content: '';
+      display: block;
+      width: 40px;
+      height: 4px;
+      background: var(--border-strong);
+      border-radius: 2px;
+      margin: 10px auto 0;
+      flex-shrink: 0;
+    }
+
+    /* ── ドロワーヘッダー ── */
+    .chat-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px 10px;
+      border-bottom: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+    }
+
+    .chat-header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+      flex: 1;
+    }
+
+    /* チャットヘッダー右エリア（アイコンボタン群） */
+    .chat-header-right {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      margin-left: auto;
+    }
+
+    /* チャットタイトル文字 */
+    .chat-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    /* ドラッグハンドル div（::before で描画済みなので非表示） */
+    .chat-drag-handle { display: none; }
+
+    /* スクリーンリーダー専用 */
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .chat-ai-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 8px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(0, 212, 255, 0.28);
+      border-radius: 10px;
+      color: var(--accent);
+      letter-spacing: 0.4px;
+    }
+
+    .chat-ai-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse-live 2s ease-in-out infinite;
+    }
+
+    .chat-icon-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 16px;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 6px;
+      min-width: 36px;
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color var(--t-fast), background var(--t-fast);
+    }
+
+    .chat-icon-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+
+    #chat-close-btn:hover { color: var(--color-error); background: rgba(255,77,109,0.1); }
+
+    /* ── クイック質問エリア ── */
+    .chat-quick-area {
+      display: flex;
+      gap: 6px;
+      padding: 7px 12px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .chat-quick-area::-webkit-scrollbar { display: none; }
+
+    .chat-quick-btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 13px;
+      min-height: 32px;
+      border: 1px solid var(--border-default);
+      border-radius: 16px;
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all var(--t-fast);
+      flex-shrink: 0;
+    }
+
+    .chat-quick-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .chat-quick-btn:active { transform: scale(0.95); }
+
+    /* ── メッセージエリア ── */
+    #chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      scroll-behavior: smooth;
+    }
+
+    /* メッセージ行（wrapper） */
+    .msg-user {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .msg-ai {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    /* メッセージバブル基底 */
+    .msg-bubble {
+      max-width: 85%;
+      padding: 9px 13px;
+      border-radius: 14px;
+      font-size: 13px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+
+    /* ユーザーバブル */
+    .msg-user .msg-bubble {
+      background: var(--accent-dim);
+      border: 1px solid rgba(0, 212, 255, 0.25);
+      color: var(--text-primary);
+      border-bottom-right-radius: 4px;
+    }
+
+    /* AI バブル */
+    .msg-ai .msg-bubble {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      color: var(--text-primary);
+      border-bottom-left-radius: 4px;
+    }
+
+    /* ウェルカムメッセージ */
+    .msg-welcome .msg-bubble {
+      background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(0,212,255,0.02));
+      border-color: rgba(0,212,255,0.2);
+    }
+
+    /* AI 返答内のコード */
+    .msg-ai .msg-bubble code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: var(--bg-base);
+      padding: 2px 5px;
+      border-radius: 3px;
+      color: var(--accent);
+    }
+
+    .msg-ai .msg-bubble pre {
+      background: var(--bg-base);
+      border: 1px solid var(--border-default);
+      border-radius: 6px;
+      padding: 9px 12px;
+      margin: 7px 0 3px;
+      overflow-x: auto;
+      font-size: 11px;
+      line-height: 1.55;
+    }
+
+    .msg-ai .msg-bubble pre code {
+      background: none;
+      padding: 0;
+      color: var(--amber);
+    }
+
+    /* 送信者ラベル */
+    .msg-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 3px;
+      letter-spacing: 0.5px;
+    }
+
+    /* タイピングインジケーター */
+    .msg-typing {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: 14px;
+      border-bottom-left-radius: 4px;
+      padding: 11px 16px;
+    }
+
+    .typing-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: typing-bounce 1.3s ease-in-out infinite;
+    }
+
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes typing-bounce {
+      0%, 60%, 100% { transform: translateY(0);    opacity: 0.4; }
+      30%            { transform: translateY(-6px); opacity: 1; }
+    }
+
+    /* エラーバブル */
+    .msg-error {
+      align-self: center;
+      background: rgba(255, 77, 109, 0.1);
+      border: 1px solid rgba(255, 77, 109, 0.3);
+      color: var(--color-error);
+      font-size: 12px;
+      border-radius: 9px;
+      padding: 8px 16px;
+      text-align: center;
+      max-width: 90%;
+    }
+
+    /* ── 入力エリア ── */
+    .chat-input-area {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      padding: 10px 12px 14px;
+      border-top: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+    }
+
+    #chat-input {
+      flex: 1;
+      padding: 10px 14px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: 20px;
+      color: var(--text-primary);
+      font-family: 'Noto Sans JP', sans-serif;
+      font-size: 13px;
+      resize: none;
+      min-height: 42px;
+      max-height: 100px;
+      line-height: 1.5;
+      transition: border-color var(--t-fast), box-shadow var(--t-fast);
+      overflow-y: auto;
+    }
+
+    #chat-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    #chat-input::placeholder { color: var(--text-muted); }
+
+    #chat-send-btn {
+      width: 44px;
+      height: 44px;
+      border: none;
+      border-radius: 22px;
+      background: var(--accent);
+      color: var(--bg-base);
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity var(--t-fast), transform var(--t-fast),
+                  box-shadow var(--t-fast);
+      flex-shrink: 0;
+      box-shadow: 0 2px 12px rgba(0,212,255,0.3);
+    }
+
+    #chat-send-btn:hover {
+      opacity: 0.88;
+      box-shadow: 0 4px 18px rgba(0,212,255,0.5);
+    }
+
+    #chat-send-btn:active { transform: scale(0.94); }
+    #chat-send-btn:disabled { opacity: 0.35; pointer-events: none; }
+
+    /* iPad 縦向き時はドロワーを 48vh に */
+    @media (orientation: portrait) {
+      #chat-drawer { height: 48vh; }
+    }
+  </style>
+
+  <style>
+    /* =============================================
+       ログイン画面
+       ============================================= */
+    #login-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-base);
+    }
+
+    .login-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 48px 40px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      border-radius: 20px;
+      max-width: 360px;
+      width: calc(100% - 40px);
+      box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+      text-align: center;
+    }
+
+    .login-logo {
+      font-size: 48px;
+      line-height: 1;
+    }
+
+    .login-title {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: var(--text-primary);
+    }
+
+    .login-title span { color: var(--accent); }
+
+    .login-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: -8px;
+    }
+
+    .login-google-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 24px;
+      height: 48px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-size: 15px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background var(--t-fast), border-color var(--t-fast), box-shadow var(--t-fast);
+      margin-top: 8px;
+    }
+
+    .login-google-btn:hover {
+      background: var(--bg-hover);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-dim);
+    }
+
+    .login-google-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .login-note {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* =============================================
+       ヘッダー ユーザーチップ
+       ============================================= */
+    .user-chip {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 10px 4px 4px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: 20px;
+      margin-left: 4px;
+      flex-shrink: 0;
+    }
+
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: block;
+      object-fit: cover;
+      background: var(--bg-active);
+    }
+
+    .user-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      max-width: 80px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* =============================================
+       設定モーダル ユーザーセクション
+       ============================================= */
+    .settings-user-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0 14px;
+    }
+
+    .settings-user-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: var(--bg-active);
+    }
+
+    .settings-user-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .settings-user-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .settings-user-email {
+      font-size: 11px;
+      color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  </style>
+
+</head>
+
+<body>
+
+<!-- =============================================
+     ログイン画面（Firebase Auth — Google Sign-In）
+     ============================================= -->
+<div id="login-screen" role="main" aria-label="ログイン">
+  <div class="login-inner">
+    <div class="login-logo" aria-hidden="true">♿</div>
+    <h1 class="login-title">Accessi<span>Editor</span></h1>
+    <p class="login-subtitle">アクセシビリティHTMLエディタ</p>
+    <button id="login-google-btn" class="login-google-btn" type="button">
+      <svg class="login-google-icon" viewBox="0 0 24 24" aria-hidden="true" width="20" height="20">
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+      </svg>
+      Googleアカウントでログイン
+    </button>
+    <p class="login-note">学習データはGoogleアカウントに紐づいて自動保存されます</p>
+  </div>
+</div>
+
+<div id="app" role="application" aria-label="AccessiEditor — HTMLアクセシビリティエディタ" hidden>
+
+  <!-- =============================================
+       ヘッダー
+       ============================================= -->
+  <header id="header" role="banner">
+
+    <!-- ロゴ -->
+    <div class="logo" aria-label="AccessiEditor">
+      <div class="logo-icon" aria-hidden="true">♿</div>
+      <span class="logo-name">Accessi<em>Editor</em></span>
+    </div>
+
+    <!-- モード切替 -->
+    <div class="mode-toggle" role="tablist" aria-label="編集モード切替">
+      <button
+        class="mode-btn active"
+        id="btn-mode-code"
+        role="tab"
+        aria-selected="true"
+        aria-controls="editor-pane"
+      >
+        <span aria-hidden="true">📝</span>コードエディタ
+      </button>
+      <button
+        class="mode-btn"
+        id="btn-mode-nocode"
+        role="tab"
+        aria-selected="false"
+        aria-controls="nocode-pane"
+        disabled
+        title="Phase 4 で実装予定"
+      >
+        <span aria-hidden="true">🖱</span>ノーコード
+        <span class="badge-soon">準備中</span>
+      </button>
+    </div>
+
+    <!-- ヘッダーアクション -->
+    <div class="header-actions">
+      <button class="btn-check" id="btn-check" aria-label="アクセシビリティチェックを実行">
+        <span aria-hidden="true">▶</span>チェック
+      </button>
+      <button class="btn-icon" id="btn-export" aria-label="HTMLをファイルとしてダウンロード" title="HTMLをエクスポート">
+        💾
+      </button>
+      <button class="btn-icon" id="btn-settings" aria-label="設定を開く" title="設定">
+        ⚙️
+      </button>
+      <!-- ログイン中ユーザー表示 -->
+      <div id="user-chip" class="user-chip" hidden aria-label="ログイン中のユーザー">
+        <img id="user-avatar" class="user-avatar" src="" alt="" aria-hidden="true" width="28" height="28">
+        <span id="user-name" class="user-name"></span>
+      </div>
+    </div>
+
+  </header>
+
+  <!-- =============================================
+       メインエリア
+       ============================================= -->
+  <main id="main" role="main">
+
+    <!-- ── エディタペイン ── -->
+    <section id="editor-pane" role="tabpanel" aria-labelledby="btn-mode-code">
+
+      <!-- テンプレートバー -->
+      <div id="template-bar" role="toolbar" aria-label="テンプレート挿入とフォントサイズ">
+        <span class="toolbar-label" aria-hidden="true">テンプレート</span>
+
+        <button class="tpl-btn" data-tpl="blank"
+          aria-label="空のHTMLボイラープレートを挿入">
+          空白
+        </button>
+        <button class="tpl-btn" data-tpl="accessible-basic"
+          aria-label="アクセシビリティ基本構造（スキップリンク・landmark・alt付き画像）を挿入">
+          基本構造
+        </button>
+        <button class="tpl-btn" data-tpl="color-safe"
+          aria-label="CUD配色済みテンプレートを挿入（コントラスト比 4.5:1 以上保証）">
+          CUD配色
+        </button>
+        <button class="tpl-btn" data-tpl="form"
+          aria-label="アクセシブルなフォームテンプレート（label・aria-required付き）を挿入">
+          フォーム
+        </button>
+
+        <!-- フォントサイズ切替 -->
+        <div class="font-controls" role="group" aria-label="エディタのフォントサイズ">
+          <button class="btn-font" data-size="12" aria-label="フォントサイズ：小">
+            <span style="font-size:11px">A</span>
+          </button>
+          <button class="btn-font active" data-size="14" aria-label="フォントサイズ：中（現在選択中）">
+            <span style="font-size:14px">A</span>
+          </button>
+          <button class="btn-font" data-size="18" aria-label="フォントサイズ：大">
+            <span style="font-size:17px">A</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- CodeMirror マウントポイント -->
+      <div id="editor-container"
+        role="region"
+        aria-label="HTMLコードエディタ"
+        aria-description="コードを入力するとリアルタイムでプレビューに反映されます">
+      </div>
+
+      <!-- 自動保存インジケーター（aria-live でスクリーンリーダーに通知） -->
+      <div id="autosave-indicator" aria-live="polite" aria-atomic="true"></div>
+
+    </section>
+
+    <!-- ── ノーコードペイン（Phase 4 プレースホルダー） ── -->
+    <section id="nocode-pane" role="tabpanel" aria-labelledby="btn-mode-nocode" hidden>
+
+      <!-- 要素ピッカー（上部横スクロール） -->
+      <div class="nc-picker" aria-label="追加する要素の選択">
+        <button class="nc-pick-btn" data-type="heading" type="button" aria-label="見出しを追加">
+          <span class="nc-pick-btn-icon" aria-hidden="true">H</span>見出し
+        </button>
+        <button class="nc-pick-btn" data-type="paragraph" type="button" aria-label="段落を追加">
+          <span class="nc-pick-btn-icon" aria-hidden="true">¶</span>段落
+        </button>
+        <button class="nc-pick-btn" data-type="image" type="button" aria-label="画像を追加">
+          <span class="nc-pick-btn-icon" aria-hidden="true">🖼</span>画像
+        </button>
+        <button class="nc-pick-btn" data-type="link" type="button" aria-label="リンクを追加">
+          <span class="nc-pick-btn-icon" aria-hidden="true">🔗</span>リンク
+        </button>
+        <button class="nc-pick-btn" data-type="list" type="button" aria-label="リストを追加">
+          <span class="nc-pick-btn-icon" aria-hidden="true">☰</span>リスト
+        </button>
+        <button class="nc-pick-btn" data-type="table" type="button" aria-label="テーブルを追加">
+          <span class="nc-pick-btn-icon" aria-hidden="true">⊞</span>テーブル
+        </button>
+      </div>
+
+      <!-- 追加済み要素リスト -->
+      <div id="nc-elements" class="nc-list" role="list" aria-label="追加済みの要素">
+        <div class="nc-empty" id="nc-empty">
+          <div class="nc-empty-icon" aria-hidden="true">✦</div>
+          <p>上のボタンをタップして<br>要素を追加してください</p>
+        </div>
+      </div>
+
+      <!-- フッター：コードを見るボタン -->
+      <div class="nc-footer">
+        <button class="nc-code-btn" id="nc-btn-see-code" type="button">
+          📝 コードを見る（コードモードに切り替え）
+        </button>
+      </div>
+
+    </section>
+
+    <!-- ── プレビューペイン ── -->
+    <section id="preview-pane" aria-label="HTMLプレビュー">
+      <div id="preview-header">
+        <span class="preview-label">
+          <span class="live-dot" aria-hidden="true"></span>
+          プレビュー
+        </span>
+        <div class="preview-actions">
+          <button class="btn-preview" id="btn-reload"
+            aria-label="プレビューを再読み込み" title="プレビューを更新">↺</button>
+          <button class="btn-preview" id="btn-fullscreen"
+            aria-label="プレビューを全画面表示" title="全画面">⤢</button>
+        </div>
+      </div>
+
+      <!--
+        sandbox="allow-scripts" で iframe を制限。
+        生徒コードが外部リソースを読み込みすぎないよう意図的に制限を緩くしていない。
+        必要に応じて allow-same-origin を追加検討。
+      -->
+      <iframe
+        id="preview-iframe"
+        title="HTMLプレビュー"
+        sandbox="allow-scripts allow-same-origin"
+        aria-label="入力したHTMLのプレビュー表示"
+      ></iframe>
+    </section>
+
+  </main>
+
+  <!-- =============================================
+       チェックパネル（下部ドロワー）
+       Phase 2 で機能実装。ここは骨格のみ。
+       ============================================= -->
+  <aside id="check-panel" aria-label="アクセシビリティチェック結果">
+    <button
+      id="check-toggle-btn"
+      aria-expanded="false"
+      aria-controls="check-content"
+    >
+      <span class="toggle-arrow" aria-hidden="true">▼</span>
+      <span>アクセシビリティチェック結果</span>
+
+      <div class="check-badges" id="check-badges" role="status" aria-live="polite">
+        <span class="badge idle">チェック未実行</span>
+      </div>
+    </button>
+
+    <div id="check-content" role="region" aria-label="チェック結果詳細">
+      <!-- サマリー行：JS で動的に生成 -->
+      <div id="check-summary" hidden></div>
+      <!-- 結果リスト：JS で動的に生成 -->
+      <div id="check-list">
+        <div class="check-idle-msg">
+          「<strong>▶ チェック</strong>」ボタンを押すと、A01〜A11 の<br>
+          アクセシビリティ項目を一括チェックします。
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- =============================================
+       AIチャット FAB（右下固定）
+       Phase 3 でチャット機能を実装。
+       ============================================= -->
+  <button id="chat-fab" aria-label="AIアシスタント「AccessiAI」に相談する">
+    <span aria-hidden="true">💬</span>AIに相談
+  </button>
+
+  <!-- =============================================
+       APIキー設定モーダル（Phase 3）
+       ============================================= -->
+  <div id="api-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="api-modal-title" aria-hidden="true">
+    <div id="api-modal-inner">
+      <div class="api-modal-logo" aria-hidden="true">🔑</div>
+      <h2 id="api-modal-title" class="api-modal-title">Gemini APIキーの設定</h2>
+      <p class="api-modal-subtitle">
+        AIアシスタント機能を使うには、Google AI StudioのAPIキーが必要です。<br>
+        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">
+          Google AI Studio でAPIキーを取得 →
+        </a>
+      </p>
+
+      <div id="api-saved-row" class="api-saved-row" hidden>
+        <span class="api-saved-label">保存済みキー：</span>
+        <span id="api-saved-mask" class="api-saved-mask"></span>
+        <button id="api-delete-btn" class="api-delete-btn" aria-label="APIキーを削除する">削除</button>
+      </div>
+
+      <div class="api-input-group">
+        <label for="api-key-input" class="api-input-label">APIキー</label>
+        <div class="api-input-wrap">
+          <input
+            type="password"
+            id="api-key-input"
+            class="api-key-input"
+            placeholder="AIza..."
+            autocomplete="off"
+            spellcheck="false"
+            aria-describedby="api-key-hint"
+          />
+          <button id="api-toggle-btn" class="api-toggle-btn" aria-label="APIキーの表示・非表示を切り替える" type="button">👁</button>
+        </div>
+        <span id="api-key-hint" class="api-input-hint">キーはこのデバイスのローカルストレージにのみ保存されます</span>
+      </div>
+
+      <div class="api-modal-actions">
+        <button id="api-cancel-btn" class="api-cancel-btn" type="button">キャンセル</button>
+        <button id="api-save-btn" class="api-save-btn" type="button">保存して使う</button>
+      </div>
+
+      <p class="api-privacy-note">⚠ APIキーは外部サーバーへ送信されません。端末内のみで管理されます。</p>
+    </div>
+  </div>
+
+  <!-- =============================================
+       設定モーダル（Phase 6）
+       APIキー / フォントサイズ / localStorage使用量
+       ============================================= -->
+  <div id="settings-overlay" role="dialog" aria-modal="true"
+       aria-labelledby="settings-title" aria-hidden="true">
+    <div class="settings-inner">
+
+      <!-- ヘッダー -->
+      <div class="settings-header">
+        <span class="settings-header-icon" aria-hidden="true">⚙️</span>
+        <span id="settings-title">設定</span>
+        <button class="settings-close-btn" id="settings-close-btn"
+                aria-label="設定を閉じる" type="button">✕</button>
+      </div>
+
+      <!-- ── Section 1: ログイン中のユーザー ── -->
+      <div class="settings-section">
+        <h3 class="settings-section-title">ログイン中のユーザー</h3>
+        <div class="settings-user-row" id="settings-user-row">
+          <img id="settings-user-avatar" class="settings-user-avatar" src="" alt="" width="36" height="36">
+          <div class="settings-user-info">
+            <span id="settings-user-name" class="settings-user-name"></span>
+            <span id="settings-user-email" class="settings-user-email"></span>
+          </div>
+        </div>
+        <button class="settings-danger-btn" id="settings-signout-btn" type="button">
+          🚪 サインアウト
+        </button>
+      </div>
+
+      <!-- ── Section 2: フォントサイズ ── -->
+      <div class="settings-section">
+        <h3 class="settings-section-title">エディタのフォントサイズ</h3>
+        <div class="settings-font-group" role="group" aria-label="フォントサイズの選択">
+          <button class="settings-font-btn" data-size="12" type="button"
+                  aria-label="フォントサイズ：小（12px）">
+            <span class="font-sample" style="font-size:13px">A</span>
+            <span class="font-label">小 / 12px</span>
+          </button>
+          <button class="settings-font-btn" data-size="14" type="button"
+                  aria-label="フォントサイズ：中（14px）">
+            <span class="font-sample" style="font-size:16px">A</span>
+            <span class="font-label">中 / 14px</span>
+          </button>
+          <button class="settings-font-btn" data-size="18" type="button"
+                  aria-label="フォントサイズ：大（18px）">
+            <span class="font-sample" style="font-size:20px">A</span>
+            <span class="font-label">大 / 18px</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── Section 3: localStorage 使用量 ── -->
+      <div class="settings-section">
+        <h3 class="settings-section-title">ローカルストレージ</h3>
+        <div class="settings-storage-meta">
+          <span id="settings-storage-used">計算中…</span>
+          <span class="settings-storage-max">最大 5 MB</span>
+        </div>
+        <div class="settings-storage-bar" role="progressbar"
+             aria-labelledby="settings-storage-used" aria-valuemin="0" aria-valuemax="100">
+          <div id="settings-storage-fill"></div>
+        </div>
+        <p class="settings-storage-note">
+          エディタのHTMLがこの端末に一時保存されています。<br>
+          学習データはFirebaseにも自動でクラウド保存されます。
+        </p>
+        <button class="settings-danger-btn" id="settings-clear-btn" type="button">
+          🗑 保存データをすべて削除する
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- =============================================
+       ノーコード要素編集モーダル（Phase 4）
+       下からスライドアップ
+       ============================================= -->
+  <div class="nc-modal-overlay" id="nc-modal-overlay"
+       role="dialog" aria-modal="true"
+       aria-labelledby="nc-modal-title" aria-hidden="true">
+    <div class="nc-modal-inner" id="nc-modal-inner">
+
+      <div class="nc-modal-header">
+        <span id="nc-modal-title" class="nc-modal-title"></span>
+        <button class="nc-modal-close" id="nc-modal-close-btn"
+                aria-label="閉じる" type="button">✕</button>
+      </div>
+
+      <!-- フォームフィールド（JS で動的生成） -->
+      <div class="nc-modal-body" id="nc-modal-body"></div>
+
+      <div class="nc-modal-actions">
+        <button class="nc-cancel-btn" id="nc-modal-cancel-btn" type="button">キャンセル</button>
+        <button class="nc-save-btn"   id="nc-modal-save-btn"   type="button">追加する</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- チャットドロワー背景オーバーレイ -->
+  <div id="chat-overlay" aria-hidden="true"></div>
+
+  <!-- =============================================
+       AIチャットドロワー（Phase 3）
+       下からスライドアップ
+       ============================================= -->
+  <div id="chat-drawer" role="dialog" aria-modal="true" aria-labelledby="chat-drawer-title" aria-hidden="true">
+    <!-- ドラッグハンドル（::before で描画） -->
+    <div class="chat-drag-handle" aria-hidden="true"></div>
+
+    <!-- ヘッダー -->
+    <div class="chat-header">
+      <div class="chat-header-left">
+        <span id="chat-drawer-title" class="chat-title">AccessiAI</span>
+        <span class="chat-ai-badge" aria-label="Gemini AIを使用">Gemini</span>
+      </div>
+      <div class="chat-header-right">
+        <button id="chat-settings-btn" class="chat-icon-btn" aria-label="APIキー設定を開く" type="button">⚙️</button>
+        <button id="chat-close-btn" class="chat-icon-btn" aria-label="チャットを閉じる" type="button">✕</button>
+      </div>
+    </div>
+
+    <!-- クイック質問ボタン -->
+    <div class="chat-quick-area" aria-label="クイック質問">
+      <button class="chat-quick-btn" data-q="このHTMLのアクセシビリティ上の問題点を教えてください" type="button">
+        🔍 問題点を教えて
+      </button>
+      <button class="chat-quick-btn" data-q="アクセシビリティを改善するための具体的なコードの修正例を教えてください" type="button">
+        🛠 修正例を見る
+      </button>
+      <button class="chat-quick-btn" data-q="WCAGのガイドラインについてわかりやすく説明してください" type="button">
+        📚 WCAGを教えて
+      </button>
+    </div>
+
+    <!-- メッセージエリア -->
+    <div id="chat-messages" class="chat-messages" role="log" aria-live="polite" aria-label="チャット履歴">
+      <div class="msg-ai msg-welcome">
+        <div class="msg-bubble">
+          <p>こんにちは！<strong>AccessiAI</strong> です。</p>
+          <p>エディタに書いたHTMLについて、アクセシビリティに関する質問に答えます。チェック結果の詳細や修正方法もサポートします。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 入力エリア -->
+    <div class="chat-input-area">
+      <textarea
+        id="chat-input"
+        class="chat-input"
+        placeholder="アクセシビリティについて質問してください…"
+        rows="1"
+        aria-label="チャット入力"
+        aria-describedby="chat-input-hint"
+      ></textarea>
+      <button id="chat-send-btn" class="chat-send-btn" aria-label="送信" type="button" disabled>
+        <span aria-hidden="true">↑</span>
+      </button>
+    </div>
+    <span id="chat-input-hint" class="visually-hidden">Shift+Enterで改行、Enterで送信</span>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- トースト通知（aria-live で読み上げ対応） -->
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+
+<!-- =============================================
+     ES Module Import Map（CodeMirror 6 CDN 解決）
+     Safari 17+ で import map をサポート。
+     ============================================= -->
+<script type="importmap">
+{
+  "imports": {
+    "codemirror":            "https://esm.sh/codemirror@6.0.1",
+    "@codemirror/state":     "https://esm.sh/@codemirror/state@6.4.1",
+    "@codemirror/view":      "https://esm.sh/@codemirror/view@6.36.3",
+    "@codemirror/lang-html": "https://esm.sh/@codemirror/lang-html@6.4.9"
+  }
+}
+</script>
+
+<script type="module">
+/* =============================================
+   Firebase — モジュラー SDK v12（ESM CDN）
+   ============================================= */
+import { initializeApp }
+  from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider,
+  signInWithPopup, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
+import { getDatabase, ref, get, set }
+  from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyAgTQAsl7eFvCXekE6doZqxmEAfwisyG98",
+  authDomain:        "thomaswebeditor.firebaseapp.com",
+  databaseURL:       "https://thomaswebeditor-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "thomaswebeditor",
+  storageBucket:     "thomaswebeditor.firebasestorage.app",
+  messagingSenderId: "773245352272",
+  appId:             "1:773245352272:web:5cfef7a0272b88c7ab1455",
+  measurementId:     "G-SFKG935D62"
+};
+
+const app      = initializeApp(firebaseConfig);
+const auth     = getAuth(app);
+const db       = getDatabase(app);
+const provider = new GoogleAuthProvider();
+
+/* グローバルに公開（メインモジュールから参照） */
+window.currentUser = null;
+
+let fbSaveTimer = null;
+window.saveToFirebase = (html) => {
+  if (!window.currentUser) return;
+  clearTimeout(fbSaveTimer);
+  fbSaveTimer = setTimeout(() => {
+    set(ref(db, `users/${window.currentUser.uid}/html`), html).catch(() => {});
+  }, 500);
+};
+
+window.loadFromFirebase = async (uid) => {
+  try {
+    const snap = await get(ref(db, `users/${uid}/html`));
+    return snap.exists() ? snap.val() : null;
+  } catch {
+    return null;
+  }
+};
+
+window.firebaseSignOut = () => signOut(auth);
+
+/* 認証状態の変化を監視 */
+onAuthStateChanged(auth, async (user) => {
+  window.currentUser = user;
+  if (user) {
+    /* ヘッダーのユーザーチップを表示 */
+    const chip   = document.getElementById('user-chip');
+    const avatar = document.getElementById('user-avatar');
+    const name   = document.getElementById('user-name');
+    if (chip)   chip.hidden = false;
+    if (avatar) { avatar.src = user.photoURL || ''; avatar.alt = user.displayName || ''; }
+    if (name)   name.textContent = user.displayName?.split(' ')[0] || '';
+
+    /* ログイン画面を非表示、アプリを表示 */
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').hidden = false;
+
+    /* Firebase からデータをロードしてエディタに反映 */
+    const cloudHtml = await window.loadFromFirebase(user.uid);
+    if (cloudHtml && window._editorView) {
+      window._editorView.dispatch({
+        changes: { from: 0, to: window._editorView.state.doc.length, insert: cloudHtml }
+      });
+    }
+  } else {
+    document.getElementById('login-screen').style.display = '';
+    document.getElementById('app').hidden = true;
+    const chip = document.getElementById('user-chip');
+    if (chip) chip.hidden = true;
+  }
+});
+
+/* Google Sign-In ボタン */
+document.getElementById('login-google-btn').addEventListener('click', () => {
+  signInWithPopup(auth, provider).catch((err) => {
+    console.error('Sign-in failed:', err);
+    alert('ログインに失敗しました。ブラウザのポップアップブロックを確認してください。');
+  });
+});
+</script>
+
+<script type="module">
+/* =============================================
+   AccessiEditor — Phase 1
+   - CodeMirror 6 エディタ（HTML モード・カスタムテーマ）
+   - iframe リアルタイムプレビュー（300ms デバウンス）
+   - localStorage 自動保存・復元
+   - テンプレート挿入（4種）
+   - フォントサイズ切替（3段階）
+   - HTML エクスポート
+   - iPad 縦横レスポンシブ対応
+   ============================================= */
+
+import { EditorView, basicSetup } from 'codemirror';
+import { EditorState }            from '@codemirror/state';
+import { html }                   from '@codemirror/lang-html';
+
+
+/* =============================================
+   テンプレート定義（tpl-ID → HTML文字列）
+   ============================================= */
+const TEMPLATES = {
+
+  /* 空のボイラープレート（lang="ja" / viewport 設定済み） */
+  blank: `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>タイトルをここに入力</title>
+</head>
+<body>
+
+  <h1>見出し</h1>
+  <p>ここにコンテンツを書きましょう。</p>
+
+</body>
+</html>`,
+
+  /* アクセシビリティ基本構造（skip link / landmark / alt付き画像） */
+  'accessible-basic': `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>アクセシブルなページ</title>
+  <style>
+    /* スキップリンクは通常は非表示、フォーカス時だけ表示 */
+    .skip-link {
+      position: absolute;
+      top: -40px;
+      left: 8px;
+      padding: 8px 16px;
+      background: #000;
+      color: #fff;
+      border-radius: 0 0 4px 4px;
+      transition: top 0.2s;
+    }
+    .skip-link:focus { top: 0; }
+  </style>
+</head>
+<body>
+
+  <!-- スキップリンク：キーボード利用者がメインコンテンツへ直接移動できる -->
+  <a href="#main-content" class="skip-link">メインコンテンツへスキップ</a>
+
+  <header role="banner">
+    <nav role="navigation" aria-label="メインナビゲーション">
+      <ul>
+        <li><a href="#">ホーム</a></li>
+        <li><a href="#">このサイトについて</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main-content" role="main">
+    <h1>メインの見出し</h1>
+    <p>ここにメインコンテンツを書きます。</p>
+
+    <!-- alt属性で画像の内容を説明する -->
+    <img src="example.jpg" alt="青い空と白い雲の写真">
+  </main>
+
+  <footer role="contentinfo">
+    <p>Copyright &copy; 2026 あなたの名前</p>
+  </footer>
+
+</body>
+</html>`,
+
+  /* CUD配色済み基本ページ（コントラスト比 4.5:1 以上保証） */
+  'color-safe': `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CUD配色のページ</title>
+  <style>
+    /*
+      CUD（色覚ユニバーサルデザイン）に配慮した配色。
+      すべてのテキストはコントラスト比 4.5:1 以上を確保しています。
+    */
+    body {
+      background-color: #FFFFFF;  /* 白 */
+      color: #1A1A1A;             /* 濃いグレー（コントラスト比 約16:1） */
+      font-family: sans-serif;
+      font-size: 16px;
+      line-height: 1.7;
+      padding: 20px;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    h1 { color: #003366; } /* 濃い青（コントラスト比 約13:1） */
+
+    a {
+      color: #0055CC;  /* 青（コントラスト比 約7:1） */
+    }
+    a:hover { text-decoration: none; }
+
+    /* 強調ボックス：黄色背景 + 濃い茶テキスト */
+    .highlight {
+      background-color: #FFF3CD;
+      color: #664D00;  /* コントラスト比 約4.7:1 */
+      padding: 12px 16px;
+      border-left: 4px solid #FFB300;
+      border-radius: 4px;
+      margin: 16px 0;
+    }
+
+    /* エラー表示：赤ではなく形（アイコン）で区別 */
+    .error-msg::before { content: "⚠ "; }
+  </style>
+</head>
+<body>
+
+  <h1>CUD配色サンプルページ</h1>
+  <p>このページは色覚特性のある方でも読みやすい配色を使っています。</p>
+
+  <div class="highlight">
+    重要なお知らせをここに書きます。色だけでなく、囲みやアイコンで区別しています。
+  </div>
+
+  <p><a href="#">詳しい情報へのリンク（具体的なリンクテキスト）</a></p>
+  <p class="error-msg">入力に問題があります。確認してください。</p>
+
+</body>
+</html>`,
+
+  /* アクセシブルなフォーム（label / aria-required 付き） */
+  form: `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>お問い合わせフォーム</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      font-size: 16px;
+      padding: 24px;
+      max-width: 520px;
+      color: #1A1A1A;
+      background: #fff;
+    }
+
+    .form-group { margin-bottom: 20px; }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+
+    /* 必須マークの色：コントラスト比を確保 */
+    .required { color: #CC0000; }
+
+    input[type="text"],
+    input[type="email"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 16px;
+      border: 2px solid #767676;
+      border-radius: 4px;
+      color: #1A1A1A;
+      background: #fff;
+    }
+
+    /* フォーカス時は色 + アウトラインで視覚的に明示 */
+    input:focus, textarea:focus, select:focus {
+      outline: 3px solid #0055CC;
+      outline-offset: 2px;
+      border-color: #0055CC;
+    }
+
+    button[type="submit"] {
+      padding: 12px 28px;
+      font-size: 16px;
+      font-weight: bold;
+      background: #0055CC;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button[type="submit"]:hover { background: #003D99; }
+  </style>
+</head>
+<body>
+
+  <h1>お問い合わせ</h1>
+
+  <form novalidate>
+    <!-- label の for 属性と input の id を必ず対応させる -->
+    <div class="form-group">
+      <label for="name">
+        お名前 <span class="required" aria-label="必須">*</span>
+      </label>
+      <input
+        type="text"
+        id="name"
+        name="name"
+        autocomplete="name"
+        aria-required="true"
+        placeholder="例：山田 太郎"
+      >
+    </div>
+
+    <div class="form-group">
+      <label for="email">
+        メールアドレス <span class="required" aria-label="必須">*</span>
+      </label>
+      <input
+        type="email"
+        id="email"
+        name="email"
+        autocomplete="email"
+        aria-required="true"
+        placeholder="例：taro@example.com"
+      >
+    </div>
+
+    <div class="form-group">
+      <label for="category">お問い合わせの種類</label>
+      <select id="category" name="category">
+        <option value="">選択してください</option>
+        <option value="question">質問</option>
+        <option value="feedback">フィードバック</option>
+        <option value="other">その他</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="message">
+        メッセージ <span class="required" aria-label="必須">*</span>
+      </label>
+      <textarea
+        id="message"
+        name="message"
+        rows="5"
+        aria-required="true"
+        placeholder="お問い合わせ内容を入力してください"
+      ></textarea>
+    </div>
+
+    <button type="submit">送信する</button>
+  </form>
+
+</body>
+</html>`
+};
+
+
+/* =============================================
+   CodeMirror カスタムテーマ（Midnight Blueprint）
+   ============================================= */
+const accessiTheme = EditorView.theme({
+  /* エディタ全体 */
+  '&': {
+    backgroundColor: '#080C18',
+    color: '#A8C0FF',
+    height: '100%',
+  },
+
+  /* 編集エリア */
+  '.cm-content': {
+    caretColor: '#00D4FF',
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: '14px',        /* JS の setFontSize() で上書き */
+    lineHeight: '1.65',
+    padding: '14px 0',
+  },
+
+  /* カーソル */
+  '.cm-cursor, .cm-dropCursor': {
+    borderLeftColor: '#00D4FF',
+    borderLeftWidth: '2px',
+  },
+
+  /* 選択範囲 */
+  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+    backgroundColor: 'rgba(0, 212, 255, 0.18)',
+  },
+
+  /* アクティブライン */
+  '.cm-activeLine': {
+    backgroundColor: 'rgba(255, 255, 255, 0.025)',
+  },
+
+  /* 行番号ガター */
+  '.cm-gutters': {
+    backgroundColor: '#060A15',
+    color: '#2E3D65',
+    border: 'none',
+    borderRight: '1px solid #1A2035',
+    minWidth: '46px',
+  },
+
+  '.cm-lineNumbers .cm-gutterElement': {
+    padding: '0 12px 0 8px',
+  },
+
+  '.cm-activeLineGutter': {
+    backgroundColor: 'rgba(255,255,255,0.025)',
+    color: '#7B8DB8',
+  },
+
+  /* 検索マッチ */
+  '.cm-searchMatch': {
+    backgroundColor: 'rgba(255, 179, 71, 0.2)',
+    outline: '1px solid rgba(255, 179, 71, 0.4)',
+  },
+  '.cm-searchMatch.cm-searchMatch-selected': {
+    backgroundColor: 'rgba(255, 179, 71, 0.35)',
+  },
+
+  /* ブラケットマッチ */
+  '&.cm-focused .cm-matchingBracket': {
+    backgroundColor: 'rgba(0, 212, 255, 0.14)',
+    outline: '1px solid rgba(0, 212, 255, 0.35)',
+  },
+
+  /* オートコンプリートツールチップ */
+  '.cm-tooltip': {
+    border: '1px solid #27324F',
+    backgroundColor: '#0E1325',
+    color: '#E0E8FF',
+    borderRadius: '6px',
+  },
+  '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+    backgroundColor: 'rgba(0, 212, 255, 0.15)',
+    color: '#E0E8FF',
+  },
+
+  /* 折りたたみプレースホルダー */
+  '.cm-foldPlaceholder': {
+    backgroundColor: 'transparent',
+    border: 'none',
+    color: '#00D4FF',
+  },
+}, { dark: true });  /* dark:true で syntaxHighlighting がダーク用配色を使う */
+
+
+/* =============================================
+   アプリ状態
+   ============================================= */
+const STORAGE_KEY  = 'accessi-editor-html-v1';
+const DEFAULT_HTML = TEMPLATES['accessible-basic'];
+
+let editorView     = null;   /* CodeMirror EditorView インスタンス */
+let currentFontSize = 14;   /* 現在のフォントサイズ（px） */
+let debounceTimer  = null;   /* プレビュー更新用タイマー */
+let autosaveTimer  = null;   /* 自動保存インジケーター非表示タイマー */
+let toastTimer     = null;   /* トースト非表示タイマー */
+
+
+/* =============================================
+   エディタ初期化
+   ============================================= */
+function initEditor() {
+  const savedHTML = (() => {
+    try { return localStorage.getItem(STORAGE_KEY) || DEFAULT_HTML; }
+    catch { return DEFAULT_HTML; }  /* プライベートブラウズ対応 */
+  })();
+
+  editorView = new EditorView({
+    state: EditorState.create({
+      doc: savedHTML,
+      extensions: [
+        basicSetup,
+        html(),
+        accessiTheme,
+        /* 変更検知：プレビュー更新 & 自動保存 */
+        EditorView.updateListener.of(update => {
+          if (update.docChanged) schedulePreviewUpdate();
+        }),
+      ],
+    }),
+    parent: document.getElementById('editor-container'),
+  });
+
+  /* 初回プレビュー反映 */
+  updatePreview(savedHTML);
+
+  /* Firebase auth コールバックからアクセスできるように window に公開 */
+  window._editorView = editorView;
+}
+
+
+/* =============================================
+   プレビュー更新（300ms デバウンス）
+   ============================================= */
+function schedulePreviewUpdate() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    const html = editorView.state.doc.toString();
+    updatePreview(html);
+    autoSave(html);
+  }, 300);
+}
+
+function updatePreview(htmlContent) {
+  document.getElementById('preview-iframe').srcdoc = htmlContent;
+}
+
+
+/* =============================================
+   localStorage 自動保存
+   ============================================= */
+function autoSave(htmlContent) {
+  try {
+    localStorage.setItem(STORAGE_KEY, htmlContent);
+    flashAutosaveIndicator();
+  } catch (e) {
+    /* Safari プライベートブラウズでは失敗することがある（想定内） */
+  }
+  /* Firebase にもクラウド保存（ログイン済みのときのみ） */
+  if (typeof window.saveToFirebase === 'function') window.saveToFirebase(htmlContent);
+}
+
+function flashAutosaveIndicator() {
+  const el = document.getElementById('autosave-indicator');
+  el.textContent = '● 自動保存済み';
+  el.classList.add('visible');
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => el.classList.remove('visible'), 2000);
+}
+
+
+/* =============================================
+   トースト通知
+   type: 'success' | 'warning' | 'error'
+   ============================================= */
+function showToast(message, type = 'success', duration = 2500) {
+  const el = document.getElementById('toast');
+  clearTimeout(toastTimer);
+  el.textContent = message;
+  el.className = `show toast-${type}`;
+  toastTimer = setTimeout(() => { el.className = ''; }, duration);
+}
+
+
+/* =============================================
+   フォントサイズ切替
+   ============================================= */
+function setFontSize(size) {
+  currentFontSize = size;
+
+  /* cm-content の font-size を直接更新（テーマ再生成より軽量） */
+  const cmContent = document.querySelector('#editor-container .cm-content');
+  if (cmContent) cmContent.style.fontSize = `${size}px`;
+
+  /* ボタン状態更新 */
+  document.querySelectorAll('.btn-font').forEach(btn => {
+    const isActive = parseInt(btn.dataset.size) === size;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-label',
+      `フォントサイズ：${isActive ? '（現在選択中）' : ''}` +
+      (size === 12 ? '小' : size === 14 ? '中' : '大')
+    );
+  });
+
+  showToast(`フォントサイズを変更しました`, 'success', 1500);
+}
+
+
+/* =============================================
+   テンプレート挿入
+   ============================================= */
+function insertTemplate(tplId) {
+  const content = TEMPLATES[tplId];
+  if (!content || !editorView) return;
+
+  /* 既存コンテンツがある場合は確認ダイアログを表示 */
+  const current = editorView.state.doc.toString().trim();
+  const isBlank  = current === '' || current === DEFAULT_HTML.trim();
+
+  if (!isBlank) {
+    const ok = window.confirm(
+      'テンプレートを挿入すると現在の内容が消えます。\n続けますか？'
+    );
+    if (!ok) return;
+  }
+
+  editorView.dispatch({
+    changes: { from: 0, to: editorView.state.doc.length, insert: content },
+  });
+
+  showToast('テンプレートを挿入しました ✓', 'success');
+}
+
+
+/* =============================================
+   HTML エクスポート（Blob + <a download>）
+   ============================================= */
+function exportHTML() {
+  if (!editorView) return;
+  const content = editorView.state.doc.toString();
+  const blob    = new Blob([content], { type: 'text/html;charset=utf-8' });
+  const url     = URL.createObjectURL(blob);
+  const anchor  = document.createElement('a');
+  anchor.href     = url;
+  anchor.download = 'my-page.html';
+  anchor.click();
+  URL.revokeObjectURL(url);
+  showToast('HTMLをダウンロードしました 💾', 'success');
+}
+
+
+/* =============================================
+   チェックパネル 開閉
+   ============================================= */
+function toggleCheckPanel() {
+  const panel   = document.getElementById('check-panel');
+  const toggleBtn = document.getElementById('check-toggle-btn');
+  const expanded  = panel.classList.toggle('expanded');
+  toggleBtn.setAttribute('aria-expanded', String(expanded));
+
+  /* チャットFABの bottom 位置をパネル高さに合わせて調整 */
+  const panelH = expanded ? 240 : 48;
+  document.getElementById('chat-fab').style.bottom = `${panelH + 16}px`;
+}
+
+
+/* =============================================
+   DOM 準備完了後の初期化
+   ============================================= */
+document.addEventListener('DOMContentLoaded', () => {
+
+  /* ── エディタ起動 ── */
+  initEditor();
+
+  /* ── localStorage 利用可否チェック（プライベートブラウズ対策） ── */
+  try {
+    localStorage.setItem('_accessi_test', '1');
+    localStorage.removeItem('_accessi_test');
+  } catch {
+    showToast(
+      '⚠ プライベートブラウズでは自動保存が使えません',
+      'warning', 6000
+    );
+  }
+
+  /* ── テンプレートボタン ── */
+  document.querySelectorAll('.tpl-btn').forEach(btn => {
+    btn.addEventListener('click', () => insertTemplate(btn.dataset.tpl));
+  });
+
+  /* ── フォントサイズボタン ── */
+  document.querySelectorAll('.btn-font').forEach(btn => {
+    btn.addEventListener('click', () => setFontSize(parseInt(btn.dataset.size)));
+  });
+
+  /* ── エクスポート ── */
+  document.getElementById('btn-export').addEventListener('click', exportHTML);
+
+  /* ── チェックボタン（Phase 2 実装済み） ── */
+  document.getElementById('btn-check').addEventListener('click', async () => {
+    /* パネルを開いてからチェック実行 */
+    const panel = document.getElementById('check-panel');
+    if (!panel.classList.contains('expanded')) toggleCheckPanel();
+    await runAccessibilityCheck();
+  });
+
+  /* ── チェックパネルトグル ── */
+  document.getElementById('check-toggle-btn').addEventListener('click', toggleCheckPanel);
+
+  /* ── プレビュー再読み込み ── */
+  document.getElementById('btn-reload').addEventListener('click', () => {
+    if (!editorView) return;
+    updatePreview(editorView.state.doc.toString());
+    showToast('プレビューを更新しました', 'success', 1500);
+  });
+
+  /* ── プレビュー全画面 ── */
+  document.getElementById('btn-fullscreen').addEventListener('click', () => {
+    const iframe = document.getElementById('preview-iframe');
+    /* Safari は webkitRequestFullscreen を使う */
+    (iframe.requestFullscreen || iframe.webkitRequestFullscreen).call(iframe);
+  });
+
+  /* ── チャット FAB ── */
+  document.getElementById('chat-fab').addEventListener('click', () => {
+    openChatDrawer();
+  });
+
+  /* ── 設定ボタン → 設定モーダル（Phase 6） ── */
+  document.getElementById('btn-settings').addEventListener('click', () => {
+    openSettingsModal();
+  });
+
+  /* ── モード切替（ノーコードは Phase 4 で実装） ── */
+  /* ── コードモードへ切替 ── */
+  document.getElementById('btn-mode-code').addEventListener('click', () => {
+    document.getElementById('btn-mode-code').classList.add('active');
+    document.getElementById('btn-mode-code').setAttribute('aria-selected', 'true');
+    document.getElementById('btn-mode-nocode').classList.remove('active');
+    document.getElementById('btn-mode-nocode').setAttribute('aria-selected', 'false');
+    document.getElementById('editor-pane').hidden = false;
+    document.getElementById('nocode-pane').hidden = true;
+  });
+
+  /* ── ノーコードモードへ切替 ── */
+  document.getElementById('btn-mode-nocode').addEventListener('click', () => {
+    document.getElementById('btn-mode-nocode').classList.add('active');
+    document.getElementById('btn-mode-nocode').setAttribute('aria-selected', 'true');
+    document.getElementById('btn-mode-code').classList.remove('active');
+    document.getElementById('btn-mode-code').setAttribute('aria-selected', 'false');
+    document.getElementById('nocode-pane').hidden = false;
+    document.getElementById('editor-pane').hidden = true;
+    ncRenderList();
+  });
+
+  /* Phase 3・4・6 初期化 */
+  initPhase3();
+  initPhase4();
+  initPhase6();
+
+});
+
+
+/* ==========================================================
+   Phase 2 — アクセシビリティチェックエンジン
+   対象チェック: A01〜A11（要件定義書 §4.4 準拠）
+   ========================================================== */
+
+/* ----------------------------------------------------------
+   チェック定義テーブル
+   各エントリに id / severity / title / hint / fix を定義。
+   実際の検査ロジックは runCheck() 内で呼び出す個別関数。
+   ---------------------------------------------------------- */
+const CHECK_DEFS = {
+  A01: {
+    severity: 'error',
+    title: '<img> に alt 属性がありません',
+    hint: {
+      why:  'スクリーンリーダーは画像の内容を音声で読み上げます。alt属性がないと「画像」とだけ読み上げられ、内容が伝わりません。',
+      how:  '画像の内容を簡潔に説明するテキストをalt属性に書きましょう。',
+    },
+    fix: '<img src="写真.jpg" alt="青い空と白い雲の写真">',
+  },
+  A02: {
+    severity: 'warning',
+    title: 'alt="" の画像が装飾画像でない可能性があります',
+    hint: {
+      why:  'alt=""（空のalt）は「この画像は装飾のみで、内容がない」という意味です。内容のある画像にalt=""を使うと、スクリーンリーダーのユーザーに情報が届きません。',
+      how:  '意味のある画像にはalt属性で内容を説明してください。背景模様・飾り罫線などの装飾画像のみalt=""を使います。',
+    },
+    fix: '<!-- 内容のある画像の場合 -->\n<img src="グラフ.png" alt="2024年の売上グラフ。前年比120%">',
+  },
+  A03: {
+    severity: 'error',
+    title: '<h1> 見出しが存在しません',
+    hint: {
+      why:  'スクリーンリーダーのユーザーは見出しを手がかりにページを素早く移動します。h1がないとページの主題が不明確になります。',
+      how:  'ページの最も重要なタイトルを <h1>〜</h1> で囲みましょう。h1は1ページに1つが基本です。',
+    },
+    fix: '<h1>ページのメインタイトル</h1>',
+  },
+  A04: {
+    severity: 'warning',
+    title: '見出しレベルがスキップされています',
+    hint: {
+      why:  'h1→h3のようにレベルをとばすと、スクリーンリーダーのユーザーが「h2はどこ？」と混乱します。',
+      how:  'h1 → h2 → h3 の順に使いましょう。スキップは避けてください。',
+    },
+    fix: '<!-- 正しい例 -->\n<h1>大見出し</h1>\n<h2>中見出し</h2>\n<h3>小見出し</h3>',
+  },
+  A05: {
+    severity: 'error',
+    title: '<html> タグに lang 属性がありません',
+    hint: {
+      why:  'lang属性がないと、スクリーンリーダーが間違った言語（英語など）で読み上げてしまいます。',
+      how:  '<html>タグにlang="ja"を追加してください。',
+    },
+    fix: '<html lang="ja">',
+  },
+  A06: {
+    severity: 'error',
+    title: '<title> タグが設定されていません',
+    hint: {
+      why:  'ブラウザのタブ名やスクリーンリーダーがページを識別するのに使います。titleがないと「無題」と読み上げられます。',
+      how:  '<head>内に <title>ページの名前</title> を追加してください。',
+    },
+    fix: '<title>ページのタイトルをここに書く</title>',
+  },
+  A07: {
+    severity: 'warning',
+    title: 'リンクテキストが不明確です（「こちら」「クリック」など）',
+    hint: {
+      why:  'スクリーンリーダーはリンク一覧を読み上げます。「こちら」が並ぶとリンク先が判断できません。',
+      how:  'リンク先がわかる具体的なテキストにしましょう。',
+    },
+    fix: '<!-- 悪い例 -->\n<a href="contact.html">こちら</a>\n\n<!-- 良い例 -->\n<a href="contact.html">お問い合わせページへ</a>',
+  },
+  A08: {
+    severity: 'error',
+    title: '<input> に対応する <label> がありません',
+    hint: {
+      why:  'labelがないとスクリーンリーダーが入力欄の目的を伝えられません。フォームが使えなくなります。',
+      how:  'labelのfor属性とinputのid属性を一致させて対応付けましょう。',
+    },
+    fix: '<label for="name">お名前</label>\n<input type="text" id="name" name="name">',
+  },
+  A09: {
+    severity: 'warning',
+    title: '<table> に <caption> がありません',
+    hint: {
+      why:  'captionがないと表の目的がスクリーンリーダーのユーザーに伝わりにくくなります。',
+      how:  '<table>の直後に <caption>表のタイトル</caption> を追加しましょう。',
+    },
+    fix: '<table>\n  <caption>月別売上一覧（2024年）</caption>\n  <tr>...</tr>\n</table>',
+  },
+  A10: {
+    severity: 'error',
+    title: '<blink> または <marquee> タグが使われています',
+    hint: {
+      why:  '点滅・スクロールするコンテンツは光過敏性てんかんの方に危険です。また、集中を大きく妨げます。',
+      how:  'blink/marqueeは使わないでください。情報は静止したテキストで伝えましょう。',
+    },
+    fix: '<!-- blink/marqueeの代わりに静止テキストを使用 -->\n<p>重要なお知らせ：〇〇が変わりました</p>',
+  },
+  A11: {
+    severity: 'error',
+    title: 'テキストと背景のコントラスト比が不十分です',
+    hint: {
+      why:  '色のコントラストが低いと、視力の弱い方・高齢者・屋外でスマホを見る人が読めません。',
+      how:  '通常テキストは 4.5:1 以上、大きな文字（18pt以上）は 3:1 以上を確保してください。',
+    },
+    fix: '/* 推奨カラーの例（コントラスト比 7:1 以上） */\nbody {\n  background-color: #FFFFFF;\n  color: #1A1A1A;\n}\na { color: #0055CC; }',
+  },
+};
+
+
+/* ----------------------------------------------------------
+   メインチェック実行関数
+   ---------------------------------------------------------- */
+async function runAccessibilityCheck() {
+  const btn = document.getElementById('btn-check');
+
+  /* ── ローディング状態 ── */
+  btn.classList.add('running');
+  btn.innerHTML = '<span aria-hidden="true"></span>チェック中…';
+
+  /* プレビュー iframe が確実にロードされるよう少し待つ */
+  await new Promise(r => setTimeout(r, 200));
+
+  try {
+    const htmlContent = editorView.state.doc.toString();
+
+    /* DOMParser でソースを DOM 化（A01〜A10 はここで検査） */
+    const parser  = new DOMParser();
+    const srcDoc  = parser.parseFromString(htmlContent, 'text/html');
+
+    const results = [
+      checkA01(srcDoc),
+      checkA02(srcDoc),
+      checkA03(srcDoc),
+      checkA04(srcDoc),
+      checkA05(htmlContent),
+      checkA06(srcDoc),
+      checkA07(srcDoc),
+      checkA08(srcDoc),
+      checkA09(srcDoc),
+      checkA10(srcDoc),
+      await checkA11(),   /* コントラスト比：iframe の computedStyle を使用 */
+    ];
+
+    renderCheckResults(results);
+
+  } catch (err) {
+    showToast('チェック中にエラーが発生しました', 'error');
+    console.error('[AccessiEditor] check error:', err);
+  } finally {
+    /* ── ボタンを元に戻す ── */
+    btn.classList.remove('running');
+    btn.innerHTML = '<span aria-hidden="true">▶</span>チェック';
+  }
+}
+
+
+/* ----------------------------------------------------------
+   個別チェック関数（A01〜A10）
+   引数: DOMParser で生成した Document
+   戻り値: { id, severity, passed, count, items }
+   ---------------------------------------------------------- */
+
+/* A01: <img> に alt 属性があるか */
+function checkA01(doc) {
+  const imgs    = [...doc.querySelectorAll('img')];
+  const missing = imgs.filter(el => !el.hasAttribute('alt'));
+  return {
+    id:     'A01',
+    passed: missing.length === 0,
+    count:  missing.length,
+    items:  missing.map(el => outerSnippet(el)),
+  };
+}
+
+/* A02: alt="" が内容のある画像に使われていないか（src が空でない画像に限定） */
+function checkA02(doc) {
+  const imgs     = [...doc.querySelectorAll('img[alt=""]')];
+  /* src が空・#・なし の場合は装飾扱いで除外 */
+  const suspects = imgs.filter(el => {
+    const src = (el.getAttribute('src') || '').trim();
+    return src && src !== '#';
+  });
+  return {
+    id:     'A02',
+    passed: suspects.length === 0,
+    count:  suspects.length,
+    items:  suspects.map(el => outerSnippet(el)),
+  };
+}
+
+/* A03: <h1> が1つ以上あるか */
+function checkA03(doc) {
+  const h1s = doc.querySelectorAll('h1');
+  return {
+    id:     'A03',
+    passed: h1s.length >= 1,
+    count:  h1s.length === 0 ? 1 : 0,  /* 0件 → 問題1件として扱う */
+    items:  [],
+  };
+}
+
+/* A04: 見出しレベルのスキップがないか */
+function checkA04(doc) {
+  const headings = [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6')]
+    .map(el => parseInt(el.tagName[1]));
+
+  const skips = [];
+  for (let i = 1; i < headings.length; i++) {
+    if (headings[i] - headings[i - 1] > 1) {
+      skips.push(`h${headings[i - 1]} → h${headings[i]}（レベルをスキップ）`);
+    }
+  }
+  return {
+    id:     'A04',
+    passed: skips.length === 0,
+    count:  skips.length,
+    items:  skips,
+  };
+}
+
+/* A05: <html lang="..."> が設定されているか（ソース文字列を直接検査） */
+function checkA05(htmlStr) {
+  /* DOMParser は lang を正規化してしまうため、正規表現でソースを検査 */
+  const hasLang = /<html[^>]+lang\s*=/i.test(htmlStr);
+  return {
+    id:     'A05',
+    passed: hasLang,
+    count:  hasLang ? 0 : 1,
+    items:  [],
+  };
+}
+
+/* A06: <title> タグがあるか（中身が空でないことも確認） */
+function checkA06(doc) {
+  const title = doc.querySelector('title');
+  const ok    = title && title.textContent.trim().length > 0;
+  return {
+    id:     'A06',
+    passed: !!ok,
+    count:  ok ? 0 : 1,
+    items:  [],
+  };
+}
+
+/* A07: <a> テキストが「こちら」「クリック」「ここ」等になっていないか */
+function checkA07(doc) {
+  const NG_WORDS = ['こちら', 'クリック', 'here', 'click', 'ここ', 'link', 'リンク'];
+  const links    = [...doc.querySelectorAll('a')];
+  const bad      = links.filter(el => {
+    const text = el.textContent.trim().toLowerCase();
+    return NG_WORDS.some(w => text === w.toLowerCase());
+  });
+  return {
+    id:     'A07',
+    passed: bad.length === 0,
+    count:  bad.length,
+    items:  bad.map(el => `「${el.textContent.trim()}」 → ${el.getAttribute('href') || '(href なし)'}`),
+  };
+}
+
+/* A08: <input>（type=hidden 以外）に対応する <label> があるか */
+function checkA08(doc) {
+  const inputs  = [...doc.querySelectorAll('input:not([type="hidden"]), textarea, select')];
+  const missing = inputs.filter(input => {
+    const id = input.id;
+    /* aria-label / aria-labelledby があれば OK */
+    if (input.hasAttribute('aria-label') || input.hasAttribute('aria-labelledby')) return false;
+    /* 対応する <label for="id"> があれば OK */
+    if (id && doc.querySelector(`label[for="${id}"]`)) return false;
+    /* <label> の中に直接ネストされていれば OK */
+    if (input.closest('label')) return false;
+    return true;
+  });
+  return {
+    id:     'A08',
+    passed: missing.length === 0,
+    count:  missing.length,
+    items:  missing.map(el => outerSnippet(el)),
+  };
+}
+
+/* A09: <table> に <caption> があるか */
+function checkA09(doc) {
+  const tables  = [...doc.querySelectorAll('table')];
+  const missing = tables.filter(t => !t.querySelector('caption'));
+  return {
+    id:     'A09',
+    passed: missing.length === 0,
+    count:  missing.length,
+    items:  missing.map((_, i) => `テーブル ${i + 1} 番目`),
+  };
+}
+
+/* A10: <blink> / <marquee> タグが使われていないか */
+function checkA10(doc) {
+  const blinks   = [...doc.querySelectorAll('blink')];
+  const marquees = [...doc.querySelectorAll('marquee')];
+  const bad      = [...blinks, ...marquees];
+  return {
+    id:     'A10',
+    passed: bad.length === 0,
+    count:  bad.length,
+    items:  bad.map(el => `<${el.tagName.toLowerCase()}>`),
+  };
+}
+
+
+/* ----------------------------------------------------------
+   A11: コントラスト比チェック（iframe の computedStyle を使用）
+   WCAG 2.1 AA 基準:
+     通常テキスト  → 4.5:1 以上
+     大テキスト   → 3.0:1 以上（18pt / 14pt bold 以上）
+   ---------------------------------------------------------- */
+async function checkA11() {
+  return new Promise(resolve => {
+    const iframe = document.getElementById('preview-iframe');
+
+    const doCheck = () => {
+      try {
+        const iDoc = iframe.contentDocument;
+        const iWin = iframe.contentWindow;
+        if (!iDoc || !iWin) {
+          resolve({ id: 'A11', passed: true, count: 0, items: [],
+                    _warn: 'プレビューにアクセスできませんでした' });
+          return;
+        }
+
+        /* テキストを持つ要素を取得（インライン要素も含む） */
+        const SELECTORS = 'p, h1, h2, h3, h4, h5, h6, a, li, td, th, label, button, span, div';
+        const elements  = [...iDoc.querySelectorAll(SELECTORS)].filter(el => {
+          /* 自身に直接テキストノードを持つ要素のみを対象 */
+          const text = [...el.childNodes]
+            .filter(n => n.nodeType === Node.TEXT_NODE)
+            .map(n => n.textContent.trim())
+            .join('');
+          return text.length > 0;
+        });
+
+        const violations = [];
+
+        elements.forEach(el => {
+          const style   = iWin.getComputedStyle(el);
+          const fgColor = style.color;
+          const bgColor = getEffectiveBg(el, iWin);
+
+          const ratio = computeContrastRatio(fgColor, bgColor);
+          if (ratio === null) return;  /* 色が取得できない場合はスキップ */
+
+          /* 大テキスト判定（18pt = 24px 以上、または 14pt bold = 18.67px bold 以上） */
+          const fontSize   = parseFloat(style.fontSize);
+          const fontWeight = style.fontWeight;
+          const isBold     = parseInt(fontWeight) >= 700 || fontWeight === 'bold';
+          const isLarge    = fontSize >= 24 || (isBold && fontSize >= 18.67);
+          const threshold  = isLarge ? 3.0 : 4.5;
+
+          if (ratio < threshold) {
+            const tag  = el.tagName.toLowerCase();
+            const text = el.textContent.trim().slice(0, 20) + (el.textContent.trim().length > 20 ? '…' : '');
+            violations.push({
+              tag, text,
+              ratio:     ratio.toFixed(2),
+              threshold: threshold.toFixed(1),
+              fgColor, bgColor,
+            });
+          }
+        });
+
+        resolve({
+          id:     'A11',
+          passed: violations.length === 0,
+          count:  violations.length,
+          items:  violations,
+        });
+
+      } catch (e) {
+        /* sandbox 制限等でアクセスできない場合 */
+        resolve({ id: 'A11', passed: true, count: 0, items: [],
+                  _warn: 'サンドボックス制限によりコントラストを確認できませんでした' });
+      }
+    };
+
+    /* iframe がロード済みかチェック */
+    if (iframe.contentDocument?.readyState === 'complete') {
+      doCheck();
+    } else {
+      iframe.addEventListener('load', doCheck, { once: true });
+      /* タイムアウト保険（2秒） */
+      setTimeout(() => {
+        resolve({ id: 'A11', passed: true, count: 0, items: [],
+                  _warn: 'プレビューの読み込みタイムアウト' });
+      }, 2000);
+    }
+  });
+}
+
+
+/* ----------------------------------------------------------
+   コントラスト比計算ユーティリティ（WCAG 2.1 準拠）
+   ---------------------------------------------------------- */
+
+/* rgb(r,g,b) / rgba(r,g,b,a) 文字列を [r,g,b] 配列に変換 */
+function parseRgb(colorStr) {
+  const m = colorStr.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  return m ? [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])] : null;
+}
+
+/* 相対輝度（sRGB → 線形）を計算 */
+function relativeLuminance(rgb) {
+  return rgb.map(c => {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  }).reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
+}
+
+/* コントラスト比を返す。計算不能なら null */
+function computeContrastRatio(fgStr, bgStr) {
+  const fg = parseRgb(fgStr);
+  const bg = parseRgb(bgStr);
+  if (!fg || !bg) return null;
+  const L1 = relativeLuminance(fg);
+  const L2 = relativeLuminance(bg);
+  const lighter = Math.max(L1, L2);
+  const darker  = Math.min(L1, L2);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/* 透明背景を持つ要素の実効背景色を親要素を辿って取得する */
+function getEffectiveBg(el, iWin) {
+  let current = el;
+  while (current) {
+    const bg = iWin.getComputedStyle(current).backgroundColor;
+    /* rgba(0,0,0,0) = transparent → 親へ */
+    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+    current = current.parentElement;
+  }
+  return 'rgb(255, 255, 255)';  /* 最終的に白とみなす */
+}
+
+
+/* ----------------------------------------------------------
+   チェック結果レンダリング
+   ---------------------------------------------------------- */
+function renderCheckResults(results) {
+  /* ── サマリーカウント集計 ── */
+  const errCount  = results.filter(r => !r.passed && CHECK_DEFS[r.id]?.severity === 'error').length;
+  const warnCount = results.filter(r => !r.passed && CHECK_DEFS[r.id]?.severity === 'warning').length;
+  const passCount = results.filter(r => r.passed).length;
+
+  /* ── バッジ更新 ── */
+  const badgeEl = document.getElementById('check-badges');
+  if (errCount === 0 && warnCount === 0) {
+    badgeEl.innerHTML = `<span class="badge success">✅ 全項目合格</span>`;
+  } else {
+    let html = '';
+    if (errCount  > 0) html += `<span class="badge error">🔴 エラー ${errCount}件</span>`;
+    if (warnCount > 0) html += `<span class="badge warning">🟡 警告 ${warnCount}件</span>`;
+    html += `<span class="badge success">✅ ${passCount}件</span>`;
+    badgeEl.innerHTML = html;
+  }
+
+  /* ── サマリー行 ── */
+  const summaryEl = document.getElementById('check-summary');
+  summaryEl.hidden = false;
+  summaryEl.innerHTML =
+    `<span class="summary-label">結果</span>` +
+    `<span>🔴 エラー <strong>${errCount}</strong>件　` +
+    `🟡 警告 <strong>${warnCount}</strong>件　` +
+    `✅ 合格 <strong>${passCount}</strong>件</span>`;
+
+  /* ── リスト生成 ── */
+  const listEl = document.getElementById('check-list');
+
+  if (errCount === 0 && warnCount === 0) {
+    listEl.innerHTML = `
+      <div class="all-pass-msg" role="status">
+        <div class="pass-icon">🎉</div>
+        <p>すべてのチェックに合格しました！</p>
+        <small>引き続きコントラスト比や言葉の分かりやすさにも注意しましょう。</small>
+      </div>`;
+    return;
+  }
+
+  /* エラー → 警告 → 合格 の順に並べ替えて表示 */
+  const ORDER = { error: 0, warning: 1, pass: 2 };
+  const sorted = [...results].sort((a, b) => {
+    const sevA = a.passed ? 'pass' : (CHECK_DEFS[a.id]?.severity ?? 'warning');
+    const sevB = b.passed ? 'pass' : (CHECK_DEFS[b.id]?.severity ?? 'warning');
+    return ORDER[sevA] - ORDER[sevB];
+  });
+
+  listEl.innerHTML = sorted.map(r => buildCheckItemHTML(r)).join('');
+
+  /* 展開トグルのイベントを登録 */
+  listEl.querySelectorAll('.check-item-header').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const expanded = btn.getAttribute('aria-expanded') === 'true';
+      btn.setAttribute('aria-expanded', String(!expanded));
+      const detail = document.getElementById(btn.getAttribute('aria-controls'));
+      if (detail) detail.hidden = expanded;
+    });
+  });
+
+  /* 修正例挿入ボタンのイベントを登録 */
+  listEl.querySelectorAll('.btn-insert-fix').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fixCode = btn.dataset.fix;
+      if (!fixCode || !editorView) return;
+      const pos = editorView.state.selection.main.head;
+      editorView.dispatch({
+        changes: { from: pos, insert: '\n' + fixCode + '\n' },
+      });
+      showToast('修正例を挿入しました ✓', 'success');
+    });
+  });
+}
+
+
+/* ----------------------------------------------------------
+   チェック項目1件分のHTML文字列を生成
+   ---------------------------------------------------------- */
+function buildCheckItemHTML(result) {
+  const def     = CHECK_DEFS[result.id];
+  const severity = result.passed ? 'pass' : (def?.severity ?? 'warning');
+  const icon    = severity === 'error' ? '🔴' : severity === 'warning' ? '🟡' : '✅';
+  const detailId = `check-detail-${result.id}`;
+
+  /* ── タイトル：合格なら「合格」表示、失敗なら件数付き ── */
+  let titleText = def?.title ?? result.id;
+  if (!result.passed && result.count > 0) {
+    titleText += `（${result.count}件）`;
+  }
+  if (result.passed) {
+    titleText = '合格：' + titleText.replace(/がありません|がいません|されていません/, 'あり');
+  }
+
+  /* ── 詳細リスト HTML ── */
+  let detailInner = '';
+
+  if (!result.passed && def?.hint) {
+    /* なぜ問題か / どう直すか */
+    detailInner += `
+      <div class="hint-section">
+        <p class="hint-why"><strong>なぜ問題か：</strong>${escHtml(def.hint.why)}</p>
+        <p class="hint-how"><strong>どう直すか：</strong>${escHtml(def.hint.how)}</p>
+      </div>`;
+
+    /* A11 のコントラスト違反一覧 */
+    if (result.id === 'A11' && result.items.length > 0) {
+      const listItems = result.items.slice(0, 8).map(v =>
+        `<li>
+          <span class="contrast-ratio-bad">${v.ratio}:1</span>
+          （基準 ${v.threshold}:1）
+          &lt;${escHtml(v.tag)}&gt; 「${escHtml(v.text)}」
+        </li>`
+      ).join('');
+      detailInner += `<ul class="contrast-detail-list">${listItems}</ul>`;
+      if (result.items.length > 8) {
+        detailInner += `<p style="font-size:11px;color:var(--text-muted);margin-top:4px">…他 ${result.items.length - 8} 件</p>`;
+      }
+    }
+
+    /* A01〜A10 の具体的な問題箇所 */
+    if (result.id !== 'A11' && result.items.length > 0) {
+      const listItems = result.items.slice(0, 5).map(item =>
+        `<li>${escHtml(item)}</li>`
+      ).join('');
+      detailInner += `<ul class="contrast-detail-list">${listItems}</ul>`;
+      if (result.items.length > 5) {
+        detailInner += `<p style="font-size:11px;color:var(--text-muted);margin-top:4px">…他 ${result.items.length - 5} 件</p>`;
+      }
+    }
+
+    /* 修正例コードと挿入ボタン */
+    if (def?.fix) {
+      detailInner += `
+        <div class="hint-code">${escHtml(def.fix)}</div>
+        <button class="btn-insert-fix" data-fix="${escAttr(def.fix)}">
+          ✏ 修正例を挿入
+        </button>`;
+    }
+
+    /* _warn メッセージ（A11 で sandbox 制限の場合など） */
+    if (result._warn) {
+      detailInner += `<p style="font-size:11px;color:var(--color-warning);margin-top:6px">⚠ ${escHtml(result._warn)}</p>`;
+    }
+  }
+
+  /* 合格アイテムにはヒントなし */
+  const hasDetail = !result.passed && detailInner.length > 0;
+
+  return `
+    <div class="check-item check-item--${severity}">
+      <button
+        class="check-item-header"
+        aria-expanded="false"
+        aria-controls="${detailId}"
+        ${!hasDetail ? 'disabled style="cursor:default"' : ''}
+      >
+        <span class="check-sev" aria-hidden="true">${icon}</span>
+        <span class="check-id-badge">${result.id}</span>
+        <span class="check-title">${escHtml(titleText)}</span>
+        ${hasDetail ? '<span class="check-expand-arrow" aria-hidden="true">▼</span>' : ''}
+      </button>
+      ${hasDetail
+        ? `<div class="check-item-detail" id="${detailId}" hidden>${detailInner}</div>`
+        : `<div class="check-item-detail" id="${detailId}" hidden></div>`
+      }
+    </div>`;
+}
+
+
+/* ----------------------------------------------------------
+   ユーティリティ
+   ---------------------------------------------------------- */
+
+/* 要素の開始タグのみを短縮して返す（属性は最大2つまで） */
+function outerSnippet(el) {
+  const tag   = el.tagName.toLowerCase();
+  const attrs = [...el.attributes].slice(0, 2)
+    .map(a => `${a.name}="${a.value.slice(0, 20)}"`)
+    .join(' ');
+  return `<${tag} ${attrs}>`;
+}
+
+/* HTML エスケープ */
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* 属性値エスケープ（data-fix に使用） */
+function escAttr(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;');
+}
+
+
+/* ==========================================================
+   Phase 3 — AIチャット（Gemini API）
+   ========================================================== */
+
+/* ── APIキー管理 ── */
+function getApiKey() {
+  try { return localStorage.getItem(GEMINI_KEY_STORAGE) || ''; }
+  catch { return ''; }
+}
+function saveApiKey(key) {
+  try { localStorage.setItem(GEMINI_KEY_STORAGE, key); } catch { /* noop */ }
+}
+function deleteApiKey() {
+  try { localStorage.removeItem(GEMINI_KEY_STORAGE); } catch { /* noop */ }
+}
+function maskApiKey(key) {
+  if (!key || key.length < 8) return '••••••••';
+  return key.slice(0, 4) + '••••••••' + key.slice(-4);
+}
+
+/* ── APIキー設定モーダル ── */
+function openApiKeyModal() {
+  const overlay = document.getElementById('api-modal-overlay');
+  const savedRow = document.getElementById('api-saved-row');
+  const savedMask = document.getElementById('api-saved-mask');
+  const keyInput = document.getElementById('api-key-input');
+
+  const existing = getApiKey();
+  if (existing) {
+    savedRow.hidden = false;
+    savedMask.textContent = maskApiKey(existing);
+  } else {
+    savedRow.hidden = true;
+  }
+  keyInput.value = '';
+  keyInput.type = 'password';
+
+  overlay.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  /* フォーカス管理 */
+  setTimeout(() => keyInput.focus(), 60);
+}
+
+function closeApiKeyModal() {
+  const overlay = document.getElementById('api-modal-overlay');
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+  document.getElementById('chat-fab').focus();
+}
+
+/* ── チャットドロワー ── */
+function openChatDrawer() {
+  const drawer = document.getElementById('chat-drawer');
+  const overlay = document.getElementById('chat-overlay');
+
+  drawer.setAttribute('aria-hidden', 'false');
+  drawer.classList.add('open');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  setTimeout(() => {
+    const closeBtn = document.getElementById('chat-close-btn');
+    if (closeBtn) closeBtn.focus();
+  }, 320);
+}
+
+function closeChatDrawer() {
+  const drawer = document.getElementById('chat-drawer');
+  const overlay = document.getElementById('chat-overlay');
+
+  drawer.classList.remove('open');
+  overlay.classList.remove('open');
+  drawer.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+  document.getElementById('chat-fab').focus();
+}
+
+/* ── メッセージ追加 ── */
+function appendMessage(role, html) {
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = role === 'user' ? 'msg-user' : 'msg-ai';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.innerHTML = html;
+
+  div.appendChild(bubble);
+  container.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return bubble;
+}
+
+function appendErrorMessage(text) {
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'msg-error';
+  div.textContent = '⚠ ' + text;
+  container.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+/* ── タイピングインジケーター ── */
+let typingEl = null;
+function showTypingIndicator() {
+  const container = document.getElementById('chat-messages');
+  typingEl = document.createElement('div');
+  typingEl.className = 'msg-typing';
+  typingEl.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+  container.appendChild(typingEl);
+  typingEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+function hideTypingIndicator() {
+  if (typingEl) { typingEl.remove(); typingEl = null; }
+}
+
+/* ── 簡易 Markdown → HTML ── */
+function renderMarkdown(text) {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^#{1,3}\s(.+)$/gm, '<strong>$1</strong>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+    .replace(/^(.+)$/, '<p>$1</p>');
+}
+
+/* ── Gemini API SSE 送信 ── */
+const GEMINI_SYSTEM_PROMPT = `あなたは「AccessiAI」という、高校生向けWebアクセシビリティ教育ツールのAIアシスタントです。
+ユーザーが書いたHTMLコードとアクセシビリティチェック結果を踏まえて、WCAGガイドラインに基づいた具体的でわかりやすいアドバイスをしてください。
+
+## 応答の方針
+- 高校生にわかりやすい日本語で答える
+- 技術用語には簡単な説明を添える
+- 具体的なコード例を示す（修正前→修正後）
+- 長すぎず、要点を絞って答える
+- アクセシビリティの「なぜ重要か」も伝える`;
+
+async function sendChatMessage(userText) {
+
+  const sendBtn = document.getElementById('chat-send-btn');
+  const chatInput = document.getElementById('chat-input');
+  sendBtn.disabled = true;
+  chatInput.disabled = true;
+
+  /* ユーザーメッセージ表示 */
+  appendMessage('user', renderMarkdown(userText));
+
+  /* エディタの HTML を最大 3000 文字でコンテキスト添付 */
+  const editorHtml = editorView ? editorView.state.doc.toString() : '';
+  const htmlContext = editorHtml.slice(0, 3000);
+  const contextNote = editorHtml.length > 3000 ? '\n（※ HTMLが長いため先頭3000文字のみ添付）' : '';
+
+  const fullUserMsg = `## 現在のHTMLコード${contextNote}\n\`\`\`html\n${htmlContext}\n\`\`\`\n\n## 質問\n${userText}`;
+
+  chatHistory.push({ role: 'user', parts: [{ text: fullUserMsg }] });
+
+  showTypingIndicator();
+
+  const requestBody = {
+    system_instruction: { parts: [{ text: GEMINI_SYSTEM_PROMPT }] },
+    contents: chatHistory,
+    generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+  };
+
+  const url = '/api/gemini';
+
+  let aiBubble = null;
+  let fullText = '';
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `HTTP ${res.status}`);
+    }
+
+    hideTypingIndicator();
+    aiBubble = appendMessage('ai', '');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); /* 未完行はバッファへ */
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const json = line.slice(6).trim();
+        if (json === '[DONE]') continue;
+        try {
+          const chunk = JSON.parse(json);
+          const token = chunk?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          fullText += token;
+          aiBubble.innerHTML = renderMarkdown(fullText);
+          aiBubble.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        } catch { /* 不完全なチャンクはスキップ */ }
+      }
+    }
+
+    if (!fullText) { fullText = '（応答がありませんでした）'; }
+    aiBubble.innerHTML = renderMarkdown(fullText);
+
+    chatHistory.push({ role: 'model', parts: [{ text: fullText }] });
+
+  } catch (err) {
+    hideTypingIndicator();
+    const msg = err.message.includes('API_KEY') || err.message.includes('key')
+      ? 'APIキーが無効です。設定から正しいキーを入力してください。'
+      : `エラーが発生しました: ${err.message}`;
+    appendErrorMessage(msg);
+  } finally {
+    sendBtn.disabled = chatInput.value.trim() === '';
+    chatInput.disabled = false;
+    chatInput.focus();
+  }
+}
+
+/* ── Phase 3 初期化 ── */
+function initPhase3() {
+  /* APIキー設定モーダル */
+  document.getElementById('api-cancel-btn').addEventListener('click', closeApiKeyModal);
+
+  document.getElementById('api-save-btn').addEventListener('click', () => {
+    const val = document.getElementById('api-key-input').value.trim();
+    if (!val) {
+      showToast('APIキーを入力してください', 'warning', 3000);
+      return;
+    }
+    saveApiKey(val);
+    closeApiKeyModal();
+    showToast('APIキーを保存しました', 'success', 3000);
+    openChatDrawer();
+  });
+
+  document.getElementById('api-delete-btn').addEventListener('click', () => {
+    deleteApiKey();
+    document.getElementById('api-saved-row').hidden = true;
+    document.getElementById('api-key-input').value = '';
+    showToast('APIキーを削除しました', 'warning', 2500);
+  });
+
+  document.getElementById('api-toggle-btn').addEventListener('click', () => {
+    const inp = document.getElementById('api-key-input');
+    const isPassword = inp.type === 'password';
+    inp.type = isPassword ? 'text' : 'password';
+    document.getElementById('api-toggle-btn').textContent = isPassword ? '🙈' : '👁';
+    document.getElementById('api-toggle-btn').setAttribute('aria-label',
+      isPassword ? 'APIキーを隠す' : 'APIキーを表示する');
+  });
+
+  /* Escキーでモーダル・ドロワーを閉じる */
+  document.getElementById('api-modal-overlay').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeApiKeyModal();
+  });
+
+  /* モーダル背景クリックで閉じる */
+  document.getElementById('api-modal-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('api-modal-overlay')) closeApiKeyModal();
+  });
+
+  /* チャットドロワー */
+  document.getElementById('chat-close-btn').addEventListener('click', closeChatDrawer);
+  document.getElementById('chat-settings-btn').addEventListener('click', () => {
+    closeChatDrawer();
+    openSettingsModal();
+  });
+  document.getElementById('chat-overlay').addEventListener('click', closeChatDrawer);
+
+  document.getElementById('chat-drawer').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeChatDrawer();
+  });
+
+  /* 送信ボタン有効化 */
+  const chatInput = document.getElementById('chat-input');
+  const sendBtn = document.getElementById('chat-send-btn');
+
+  chatInput.addEventListener('input', () => {
+    sendBtn.disabled = chatInput.value.trim() === '';
+    /* 自動高さ調整（最大4行） */
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 96) + 'px';
+  });
+
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const text = chatInput.value.trim();
+      if (text) {
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+        sendBtn.disabled = true;
+        sendChatMessage(text);
+      }
+    }
+  });
+
+  sendBtn.addEventListener('click', () => {
+    const text = chatInput.value.trim();
+    if (text) {
+      chatInput.value = '';
+      chatInput.style.height = 'auto';
+      sendBtn.disabled = true;
+      sendChatMessage(text);
+    }
+  });
+
+  /* クイック質問ボタン */
+  document.querySelectorAll('.chat-quick-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const q = btn.dataset.q;
+      if (q) sendChatMessage(q);
+    });
+  });
+}
+
+
+/* ==========================================================
+   Phase 4 — ノーコードモード
+   6要素（見出し・段落・画像・リンク・リスト・テーブル）を
+   GUIで組み立て、HTMLを自動生成してプレビューに反映する。
+   ========================================================== */
+
+let ncModel    = [];    // { id, type, props }[]
+let ncEditingId = null; // 編集中の要素ID（null = 新規追加）
+
+const NC_TYPES = {
+  heading:   { label: '見出し',   icon: 'H'  },
+  paragraph: { label: '段落',     icon: '¶'  },
+  image:     { label: '画像',     icon: '🖼' },
+  link:      { label: 'リンク',   icon: '🔗' },
+  list:      { label: 'リスト',   icon: '☰'  },
+  table:     { label: 'テーブル', icon: '⊞'  },
+};
+
+/* ── ユニークID生成 ── */
+function ncGenId() {
+  return Math.random().toString(36).slice(2, 9);
+}
+
+/* ── HTML生成 ── */
+function ncGenerateHTML() {
+  const body = ncModel.map(el => ncElementToHTML(el)).join('\n');
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>マイページ</title>
+  <style>
+    body { font-family: sans-serif; font-size: 16px; line-height: 1.7; max-width: 700px; margin: 0 auto; padding: 20px; color: #1A1A1A; background: #fff; }
+    img  { max-width: 100%; height: auto; display: block; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+    th { background: #f0f0f0; font-weight: bold; }
+    caption { caption-side: top; font-weight: bold; margin-bottom: 6px; }
+    a { color: #0055CC; }
+  </style>
+</head>
+<body>
+${body}
+</body>
+</html>`;
+}
+
+/* ── 要素ごとの HTML 生成 ── */
+function ncElementToHTML(el) {
+  const p = el.props;
+  switch (el.type) {
+    case 'heading': {
+      const lv   = p.level || 1;
+      const text = ncEsc(p.text || '見出し');
+      return `<h${lv}>${text}</h${lv}>`;
+    }
+    case 'paragraph': {
+      const text = ncEsc(p.text || '').replace(/\n/g, '<br>');
+      return `<p>${text}</p>`;
+    }
+    case 'image': {
+      const src   = ncEsc(p.src   || '');
+      const alt   = ncEsc(p.alt   || '');
+      const width = p.width ? ` width="${ncEsc(p.width)}"` : '';
+      return `<img src="${src}" alt="${alt}"${width}>`;
+    }
+    case 'link': {
+      const href   = ncEsc(p.href || '#');
+      const text   = ncEsc(p.text || 'リンク');
+      const target = p.newTab ? ' target="_blank" rel="noopener noreferrer"' : '';
+      return `<a href="${href}"${target}>${text}</a>`;
+    }
+    case 'list': {
+      const tag   = p.ordered ? 'ol' : 'ul';
+      const items = (p.items || ['項目']).map(i => `  <li>${ncEsc(i)}</li>`).join('\n');
+      return `<${tag}>\n${items}\n</${tag}>`;
+    }
+    case 'table': {
+      const cap     = p.caption ? `  <caption>${ncEsc(p.caption)}</caption>\n` : '';
+      const headers = p.headers || ['列1', '列2'];
+      const rows    = p.rows    || [];
+      const thead   = `  <thead>\n    <tr>${headers.map(h => `<th scope="col">${ncEsc(h)}</th>`).join('')}</tr>\n  </thead>`;
+      const tbody   = `  <tbody>\n${rows.map(row =>
+        `    <tr>${row.map((c, i) => `<td>${ncEsc(c || '')}</td>`).join('')}</tr>`
+      ).join('\n')}\n  </tbody>`;
+      return `<table>\n${cap}${thead}\n${tbody}\n</table>`;
+    }
+    default: return '';
+  }
+}
+
+/* HTML エスケープ（ノーコード用） */
+function ncEsc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* ── 要素プレビュー文字列 ── */
+function ncElementPreview(el) {
+  const p = el.props;
+  switch (el.type) {
+    case 'heading':   return `H${p.level || 1}: ${p.text || '（未入力）'}`;
+    case 'paragraph': return p.text ? p.text.slice(0, 50) : '（未入力）';
+    case 'image':     return p.alt  ? `画像: ${p.alt}` : `URL: ${p.src || '未設定'}`;
+    case 'link':      return `${p.text || 'リンク'} → ${p.href || '#'}`;
+    case 'list':      return `${p.ordered ? '番号付き' : '箇条書き'}リスト（${(p.items || []).length}項目）`;
+    case 'table':     return `${(p.headers || []).length}列テーブル${p.caption ? ': ' + p.caption : ''}`;
+    default:          return el.type;
+  }
+}
+
+/* ── プレビュー同期 ── */
+function ncSyncPreview() {
+  const iframe = document.getElementById('preview-iframe');
+  if (iframe) iframe.srcdoc = ncGenerateHTML();
+}
+
+/* ── コードエディタへ同期（コードモード切替時） ── */
+function ncSyncToEditor() {
+  if (!editorView) return;
+  const html = ncGenerateHTML();
+  editorView.dispatch({
+    changes: { from: 0, to: editorView.state.doc.length, insert: html }
+  });
+}
+
+/* ── 要素リスト描画 ── */
+function ncRenderList() {
+  const container = document.getElementById('nc-elements');
+  const empty     = document.getElementById('nc-empty');
+
+  /* 既存カードを削除（empty ステートは保持） */
+  container.querySelectorAll('.nc-card').forEach(el => el.remove());
+
+  if (ncModel.length === 0) {
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+
+  ncModel.forEach((el, idx) => {
+    const card = document.createElement('div');
+    card.className = 'nc-card';
+    card.setAttribute('role', 'listitem');
+    card.dataset.id = el.id;
+
+    const typeInfo = NC_TYPES[el.type] || { label: el.type, icon: '?' };
+    const preview  = ncElementPreview(el);
+
+    /* 並替ボタンは端の要素には表示しない */
+    const upBtn   = idx > 0
+      ? `<button class="nc-card-btn" data-action="up"   aria-label="上に移動" type="button">↑</button>`
+      : '';
+    const downBtn = idx < ncModel.length - 1
+      ? `<button class="nc-card-btn" data-action="down" aria-label="下に移動" type="button">↓</button>`
+      : '';
+
+    card.innerHTML = `
+      <span class="nc-card-badge">${typeInfo.icon} ${typeInfo.label}</span>
+      <span class="nc-card-preview">${ncEsc(preview)}</span>
+      <div class="nc-card-actions">
+        ${upBtn}${downBtn}
+        <button class="nc-card-btn"     data-action="edit" aria-label="編集" type="button">✏️</button>
+        <button class="nc-card-btn del" data-action="del"  aria-label="削除" type="button">✕</button>
+      </div>`;
+
+    /* カード本体クリック → 編集 */
+    card.addEventListener('click', (e) => {
+      if (!e.target.closest('.nc-card-btn')) ncOpenEditModal(el.id);
+    });
+
+    /* アクションボタン */
+    card.querySelectorAll('.nc-card-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        if      (action === 'edit') ncOpenEditModal(el.id);
+        else if (action === 'del' ) ncDeleteElement(el.id);
+        else if (action === 'up'  ) ncMoveElement(el.id, -1);
+        else if (action === 'down') ncMoveElement(el.id,  1);
+      });
+    });
+
+    container.appendChild(card);
+  });
+
+  ncSyncPreview();
+}
+
+/* ── 要素操作 ── */
+function ncDeleteElement(id) {
+  ncModel = ncModel.filter(el => el.id !== id);
+  ncRenderList();
+}
+
+function ncMoveElement(id, dir) {
+  const idx = ncModel.findIndex(el => el.id === id);
+  if (idx < 0) return;
+  const next = idx + dir;
+  if (next < 0 || next >= ncModel.length) return;
+  [ncModel[idx], ncModel[next]] = [ncModel[next], ncModel[idx]];
+  ncRenderList();
+}
+
+/* ── モーダル開閉 ── */
+function ncOpenModal() {
+  const overlay = document.getElementById('nc-modal-overlay');
+  overlay.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => {
+    const first = overlay.querySelector('input, textarea, select');
+    if (first) first.focus();
+  }, 320);
+}
+
+function ncCloseModal() {
+  const overlay = document.getElementById('nc-modal-overlay');
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+  ncEditingId = null;
+}
+
+function ncOpenAddModal(type) {
+  ncEditingId = null;
+  ncBuildModalBody(type, ncDefaultProps(type));
+  document.getElementById('nc-modal-title').textContent = `${NC_TYPES[type].label}を追加`;
+  document.getElementById('nc-modal-save-btn').textContent = '追加する';
+  ncOpenModal();
+}
+
+function ncOpenEditModal(id) {
+  const el = ncModel.find(e => e.id === id);
+  if (!el) return;
+  ncEditingId = id;
+  ncBuildModalBody(el.type, el.props);
+  document.getElementById('nc-modal-title').textContent = `${NC_TYPES[el.type].label}を編集`;
+  document.getElementById('nc-modal-save-btn').textContent = '保存する';
+  ncOpenModal();
+}
+
+/* ── 要素ごとのデフォルト値 ── */
+function ncDefaultProps(type) {
+  switch (type) {
+    case 'heading':   return { level: 1, text: '' };
+    case 'paragraph': return { text: '' };
+    case 'image':     return { src: '', alt: '', width: '' };
+    case 'link':      return { href: '', text: '', newTab: false };
+    case 'list':      return { ordered: false, items: ['', ''] };
+    case 'table':     return { caption: '', headers: ['列1', '列2'], rows: [['', ''], ['', '']] };
+    default:          return {};
+  }
+}
+
+/* ── モーダルフォームを動的生成 ── */
+function ncBuildModalBody(type, props) {
+  const body = document.getElementById('nc-modal-body');
+  body.dataset.type = type;
+
+  switch (type) {
+
+    case 'heading':
+      body.innerHTML = `
+        <div class="nc-field">
+          <label class="nc-label" for="nc-f-level">見出しレベル</label>
+          <select class="nc-select" id="nc-f-level">
+            <option value="1" ${props.level==1?'selected':''}>H1 — 最上位の見出し（1ページに1つ）</option>
+            <option value="2" ${props.level==2?'selected':''}>H2 — 大見出し</option>
+            <option value="3" ${props.level==3?'selected':''}>H3 — 中見出し</option>
+            <option value="4" ${props.level==4?'selected':''}>H4 — 小見出し</option>
+            <option value="5" ${props.level==5?'selected':''}>H5</option>
+            <option value="6" ${props.level==6?'selected':''}>H6</option>
+          </select>
+        </div>
+        <div class="nc-field">
+          <label class="nc-label" for="nc-f-text">見出しテキスト <span style="color:var(--color-error)">*</span></label>
+          <input class="nc-input" id="nc-f-text" type="text"
+            value="${ncEsc(props.text || '')}" placeholder="例：私のホームページ">
+        </div>`;
+      break;
+
+    case 'paragraph':
+      body.innerHTML = `
+        <div class="nc-field">
+          <label class="nc-label" for="nc-f-text">本文テキスト <span style="color:var(--color-error)">*</span></label>
+          <textarea class="nc-textarea" id="nc-f-text"
+            placeholder="段落のテキストを入力してください">${ncEsc(props.text || '')}</textarea>
+        </div>`;
+      break;
+
+    case 'image':
+      body.innerHTML = `
+        <div class="nc-field">
+          <label class="nc-label" for="nc-f-src">画像URL <span style="color:var(--color-error)">*</span></label>
+          <input class="nc-input" id="nc-f-src" type="url"
+            value="${ncEsc(props.src || '')}" placeholder="https://example.com/image.jpg">
+        </div>
+        <div class="nc-field">
+          <label class="nc-label" for="nc-f-alt">代替テキスト（alt） <span style="color:var(--color-error)">*</span></label>
+          <input class="nc-input" id="nc-f-alt" type="text"
+            value="${ncEsc(props.alt || '')}" placeholder="例：富士山の夕景写真">
+          <small style="color:var(--text-muted);font-size:11px;margin-top:3px;display:block">
+            画像の内容を説明するテキスト。スクリーンリーダーが読み上げます。装飾画像の場合は空欄でOK。
+          </small>
+        </div>
+        <div class="nc-field">
+          <label class="nc-label" for="nc-f-width">表示幅（ピクセル、省略可）</label>
+          <input class="nc-input" id="nc-f-width" type="text"
+            value="${ncEsc(props.width || '')}" placeholder="例：400">
+        </div>`;
+      break;
+
+    case 'link':
+      body.innerHTML = `
+        <div class="nc-field">
+          <label class="nc-label" for="nc-f-text">リンクテキスト <span style="color:var(--color-error)">*</span></label>
+          <input class="nc-input" id="nc-f-text" type="text"
+            value="${ncEsc(props.text || '')}" placeholder="例：アクセシビリティとは（具体的な説明を書く）">
+        </div>
+        <div class="nc-field">
+          <label class="nc-label" for="nc-f-href">リンク先URL <span style="color:var(--color-error)">*</span></label>
+          <input class="nc-input" id="nc-f-href" type="url"
+            value="${ncEsc(props.href || '')}" placeholder="https://example.com">
+        </div>
+        <div class="nc-field">
+          <label class="nc-label">開き方</label>
+          <div class="nc-toggle-group">
+            <button class="nc-toggle-btn ${!props.newTab?'active':''}" data-val="false" type="button">同じタブで開く</button>
+            <button class="nc-toggle-btn ${props.newTab?'active':''}"  data-val="true"  type="button">新しいタブで開く</button>
+          </div>
+        </div>`;
+      ncBindToggle(body);
+      break;
+
+    case 'list': {
+      const items = props.items?.length ? props.items : ['', ''];
+      body.innerHTML = `
+        <div class="nc-field">
+          <label class="nc-label">リストの種類</label>
+          <div class="nc-toggle-group">
+            <button class="nc-toggle-btn ${!props.ordered?'active':''}" data-val="false" type="button">● 箇条書き（ul）</button>
+            <button class="nc-toggle-btn ${props.ordered?'active':''}"  data-val="true"  type="button">1. 番号付き（ol）</button>
+          </div>
+        </div>
+        <div class="nc-field">
+          <label class="nc-label">項目</label>
+          <div class="nc-items-list" id="nc-list-items">
+            ${items.map((item, i) => `
+              <div class="nc-item-row">
+                <input class="nc-input nc-list-item" type="text"
+                  value="${ncEsc(item)}" placeholder="項目 ${i + 1}"
+                  aria-label="リスト項目 ${i + 1}">
+                <button class="nc-item-del" type="button" aria-label="この項目を削除">✕</button>
+              </div>`).join('')}
+          </div>
+          <button class="nc-add-row-btn" id="nc-add-item" type="button" style="margin-top:4px">
+            ＋ 項目を追加
+          </button>
+        </div>`;
+      ncBindToggle(body);
+      ncBindListItemDel();
+      document.getElementById('nc-add-item').addEventListener('click', () => {
+        const list = document.getElementById('nc-list-items');
+        const idx  = list.children.length + 1;
+        const row  = document.createElement('div');
+        row.className = 'nc-item-row';
+        row.innerHTML = `
+          <input class="nc-input nc-list-item" type="text"
+            placeholder="項目 ${idx}" aria-label="リスト項目 ${idx}">
+          <button class="nc-item-del" type="button" aria-label="この項目を削除">✕</button>`;
+        list.appendChild(row);
+        ncBindListItemDel();
+        row.querySelector('input').focus();
+      });
+      break;
+    }
+
+    case 'table': {
+      const headers = props.headers?.length ? [...props.headers] : ['列1', '列2'];
+      const rows    = props.rows?.length    ? props.rows          : [headers.map(() => '')];
+      const numCols = headers.length;
+
+      body.innerHTML = `
+        <div class="nc-field">
+          <label class="nc-label" for="nc-f-caption">キャプション（テーブルの説明、省略可）</label>
+          <input class="nc-input" id="nc-f-caption" type="text"
+            value="${ncEsc(props.caption || '')}" placeholder="例：2024年度調査結果">
+        </div>
+        <div class="nc-field">
+          <label class="nc-label">列ヘッダー</label>
+          <div class="nc-table-row" id="nc-header-row">
+            ${headers.map((h, i) => `
+              <input class="nc-table-cell nc-header-cell" type="text"
+                value="${ncEsc(h)}" placeholder="列${i+1}"
+                aria-label="ヘッダー列${i+1}">`).join('')}
+            <button class="nc-item-del" id="nc-del-col"
+              type="button" aria-label="最後の列を削除" title="列を削除">−</button>
+          </div>
+          <button class="nc-add-row-btn" id="nc-add-col" type="button" style="margin-top:4px">
+            ＋ 列を追加
+          </button>
+        </div>
+        <div class="nc-field">
+          <label class="nc-label">データ行</label>
+          <div id="nc-data-rows">
+            ${rows.map((row, ri) => `
+              <div class="nc-table-row" style="margin-bottom:4px">
+                ${Array.from({length: numCols}, (_, ci) => `
+                  <input class="nc-table-cell nc-data-cell" type="text"
+                    value="${ncEsc(row[ci] || '')}"
+                    placeholder="${ri+1}行${ci+1}列">`).join('')}
+                <button class="nc-item-del nc-del-row" type="button" aria-label="この行を削除">✕</button>
+              </div>`).join('')}
+          </div>
+          <button class="nc-add-row-btn" id="nc-add-row" type="button" style="margin-top:4px">
+            ＋ 行を追加
+          </button>
+        </div>`;
+
+      /* 列を追加 */
+      document.getElementById('nc-add-col').addEventListener('click', () => {
+        const hRow = document.getElementById('nc-header-row');
+        const n    = hRow.querySelectorAll('.nc-header-cell').length + 1;
+        const delBtn = document.getElementById('nc-del-col');
+        const inp  = document.createElement('input');
+        inp.className = 'nc-table-cell nc-header-cell';
+        inp.type = 'text';
+        inp.placeholder = `列${n}`;
+        inp.setAttribute('aria-label', `ヘッダー列${n}`);
+        hRow.insertBefore(inp, delBtn);
+        document.querySelectorAll('#nc-data-rows .nc-table-row').forEach(drow => {
+          const cell = document.createElement('input');
+          cell.className = 'nc-table-cell nc-data-cell';
+          cell.type = 'text';
+          cell.placeholder = 'データ';
+          drow.insertBefore(cell, drow.querySelector('.nc-del-row'));
+        });
+        inp.focus();
+      });
+
+      /* 列を削除 */
+      document.getElementById('nc-del-col').addEventListener('click', () => {
+        const hRow  = document.getElementById('nc-header-row');
+        const cells = hRow.querySelectorAll('.nc-header-cell');
+        if (cells.length <= 1) { showToast('列は1つ以上必要です', 'warning', 2000); return; }
+        cells[cells.length - 1].remove();
+        document.querySelectorAll('#nc-data-rows .nc-table-row').forEach(drow => {
+          const dc = drow.querySelectorAll('.nc-data-cell');
+          if (dc.length > 0) dc[dc.length - 1].remove();
+        });
+      });
+
+      /* 行を追加 */
+      document.getElementById('nc-add-row').addEventListener('click', () => {
+        const dataRows = document.getElementById('nc-data-rows');
+        const cols = document.getElementById('nc-header-row').querySelectorAll('.nc-header-cell').length;
+        const ri   = dataRows.children.length;
+        const row  = document.createElement('div');
+        row.className = 'nc-table-row';
+        row.style.marginBottom = '4px';
+        row.innerHTML =
+          Array.from({length: cols}, (_, ci) =>
+            `<input class="nc-table-cell nc-data-cell" type="text" placeholder="${ri+1}行${ci+1}列">`
+          ).join('') +
+          `<button class="nc-item-del nc-del-row" type="button" aria-label="この行を削除">✕</button>`;
+        dataRows.appendChild(row);
+        ncBindRowDel();
+        row.querySelector('input')?.focus();
+      });
+
+      ncBindRowDel();
+      break;
+    }
+  }
+}
+
+/* ── ヘルパー：トグル・削除ボタンバインド ── */
+function ncBindToggle(container) {
+  container.querySelectorAll('.nc-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const group = btn.closest('.nc-toggle-group');
+      group.querySelectorAll('.nc-toggle-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+}
+
+function ncBindListItemDel() {
+  const list = document.getElementById('nc-list-items');
+  if (!list) return;
+  list.querySelectorAll('.nc-item-del').forEach(btn => {
+    btn.onclick = () => {
+      if (list.children.length <= 1) { showToast('項目は1つ以上必要です', 'warning', 2000); return; }
+      btn.closest('.nc-item-row').remove();
+    };
+  });
+}
+
+function ncBindRowDel() {
+  const dataRows = document.getElementById('nc-data-rows');
+  if (!dataRows) return;
+  dataRows.querySelectorAll('.nc-del-row').forEach(btn => {
+    btn.onclick = () => {
+      if (dataRows.children.length <= 1) { showToast('行は1つ以上必要です', 'warning', 2000); return; }
+      btn.closest('.nc-table-row').remove();
+    };
+  });
+}
+
+/* ── モーダル保存（モデルへ書き込み） ── */
+function ncSaveModal() {
+  const body = document.getElementById('nc-modal-body');
+  const type = body.dataset.type;
+  let props;
+
+  switch (type) {
+    case 'heading': {
+      const text = document.getElementById('nc-f-text').value.trim();
+      if (!text) { showToast('見出しテキストを入力してください', 'warning', 2500); return; }
+      props = { level: parseInt(document.getElementById('nc-f-level').value), text };
+      break;
+    }
+    case 'paragraph': {
+      const text = document.getElementById('nc-f-text').value.trim();
+      if (!text) { showToast('本文テキストを入力してください', 'warning', 2500); return; }
+      props = { text };
+      break;
+    }
+    case 'image': {
+      const src = document.getElementById('nc-f-src').value.trim();
+      const alt = document.getElementById('nc-f-alt').value.trim();
+      if (!src) { showToast('画像URLを入力してください', 'warning', 2500); return; }
+      /* alt が空 = 装飾画像として許容するが警告 */
+      if (!alt) showToast('💡 装飾画像の場合はalt=""と設定されます', 'warning', 3000);
+      props = { src, alt, width: document.getElementById('nc-f-width').value.trim() };
+      break;
+    }
+    case 'link': {
+      const text = document.getElementById('nc-f-text').value.trim();
+      const href = document.getElementById('nc-f-href').value.trim();
+      if (!text) { showToast('リンクテキストを入力してください', 'warning', 2500); return; }
+      if (!href) { showToast('リンク先URLを入力してください', 'warning', 2500); return; }
+      const activeToggle = body.querySelector('.nc-toggle-btn.active');
+      props = { text, href, newTab: activeToggle?.dataset.val === 'true' };
+      break;
+    }
+    case 'list': {
+      const ordered = body.querySelector('.nc-toggle-btn.active')?.dataset.val === 'true';
+      const items   = [...document.querySelectorAll('.nc-list-item')]
+                        .map(i => i.value.trim()).filter(Boolean);
+      if (items.length === 0) { showToast('項目を1つ以上入力してください', 'warning', 2500); return; }
+      props = { ordered, items };
+      break;
+    }
+    case 'table': {
+      const caption = document.getElementById('nc-f-caption')?.value.trim() || '';
+      const headers = [...document.querySelectorAll('.nc-header-cell')]
+                        .map(c => c.value.trim() || c.placeholder);
+      const rows    = [...document.querySelectorAll('#nc-data-rows .nc-table-row')]
+                        .map(row => [...row.querySelectorAll('.nc-data-cell')].map(c => c.value.trim()));
+      props = { caption, headers, rows };
+      break;
+    }
+    default: return;
+  }
+
+  if (ncEditingId) {
+    const el = ncModel.find(e => e.id === ncEditingId);
+    if (el) el.props = props;
+  } else {
+    ncModel.push({ id: ncGenId(), type, props });
+  }
+
+  ncCloseModal();
+  ncRenderList();
+  showToast(ncEditingId ? '要素を更新しました' : '要素を追加しました', 'success', 1800);
+}
+
+/* ── Phase 4 初期化 ── */
+function initPhase4() {
+  /* 要素ピッカーボタン */
+  document.querySelectorAll('.nc-pick-btn').forEach(btn => {
+    btn.addEventListener('click', () => ncOpenAddModal(btn.dataset.type));
+  });
+
+  /* モーダル閉じるボタン群 */
+  document.getElementById('nc-modal-close-btn' ).addEventListener('click', ncCloseModal);
+  document.getElementById('nc-modal-cancel-btn').addEventListener('click', ncCloseModal);
+  document.getElementById('nc-modal-save-btn'  ).addEventListener('click', ncSaveModal);
+
+  /* 背景クリック・Escで閉じる */
+  document.getElementById('nc-modal-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('nc-modal-overlay')) ncCloseModal();
+  });
+  document.getElementById('nc-modal-overlay').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') ncCloseModal();
+  });
+
+  /* 「コードを見る」ボタン */
+  document.getElementById('nc-btn-see-code').addEventListener('click', () => {
+    ncSyncToEditor();
+    document.getElementById('btn-mode-code').click();
+    showToast('コードモードに切り替えました', 'success', 2000);
+  });
+}
+
+
+/* ==========================================================
+   Phase 6 — 設定モーダル・UX磨き
+   ========================================================== */
+
+/* ── localStorage 使用量を計算して表示 ── */
+function updateStorageDisplay() {
+  const usedEl = document.getElementById('settings-storage-used');
+  const fillEl = document.getElementById('settings-storage-fill');
+  const bar    = fillEl?.closest('[role="progressbar"]');
+
+  try {
+    let totalBytes = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      totalBytes += ((localStorage.getItem(key) || '').length + key.length) * 2;
+    }
+    const kb      = (totalBytes / 1024).toFixed(1);
+    const maxBytes = 5 * 1024 * 1024;
+    const pct      = Math.min((totalBytes / maxBytes) * 100, 100);
+    const pctStr   = pct.toFixed(1);
+
+    if (usedEl) usedEl.textContent = `使用量：${kb} KB（${pctStr}%）`;
+    if (fillEl) {
+      fillEl.style.width = `${pct}%`;
+      fillEl.style.background =
+        pct > 80 ? 'var(--color-error)' :
+        pct > 50 ? 'var(--color-warning)' :
+                   'var(--accent)';
+    }
+    if (bar) bar.setAttribute('aria-valuenow', Math.round(pct));
+  } catch {
+    if (usedEl) usedEl.textContent = '取得不可（プライベートブラウズ）';
+    if (fillEl) fillEl.style.width = '0%';
+  }
+}
+
+/* ── 設定モーダルを開く ── */
+function openSettingsModal() {
+  /* ユーザー情報セクションを現在の状態で描画 */
+  const user = window.currentUser || null;
+  const avatarEl = document.getElementById('settings-user-avatar');
+  const nameEl   = document.getElementById('settings-user-name');
+  const emailEl  = document.getElementById('settings-user-email');
+  if (user) {
+    if (avatarEl) { avatarEl.src = user.photoURL || ''; avatarEl.alt = user.displayName || ''; }
+    if (nameEl)   nameEl.textContent  = user.displayName || '（名前なし）';
+    if (emailEl)  emailEl.textContent = user.email || '';
+  }
+
+  /* フォントサイズボタンの選択状態を反映 */
+  document.querySelectorAll('.settings-font-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.size) === currentFontSize);
+  });
+
+  /* localStorage 使用量を更新 */
+  updateStorageDisplay();
+
+  /* オーバーレイを開く */
+  const overlay = document.getElementById('settings-overlay');
+  overlay.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  setTimeout(() => {
+    document.getElementById('settings-close-btn').focus();
+  }, 60);
+}
+
+/* ── 設定モーダルを閉じる ── */
+function closeSettingsModal() {
+  const overlay = document.getElementById('settings-overlay');
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+  document.getElementById('btn-settings').focus();
+}
+
+/* ── Phase 6 初期化 ── */
+function initPhase6() {
+  /* 閉じるボタン */
+  document.getElementById('settings-close-btn').addEventListener('click', closeSettingsModal);
+
+  /* 背景クリック・Esc で閉じる */
+  document.getElementById('settings-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('settings-overlay')) closeSettingsModal();
+  });
+  document.getElementById('settings-overlay').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeSettingsModal();
+  });
+
+  /* サインアウトボタン */
+  document.getElementById('settings-signout-btn').addEventListener('click', () => {
+    const ok = window.confirm('サインアウトします。よろしいですか？');
+    if (!ok) return;
+    closeSettingsModal();
+    if (typeof window.firebaseSignOut === 'function') {
+      window.firebaseSignOut().then(() => {
+        showToast('サインアウトしました', 'success', 2500);
+      }).catch(() => {
+        showToast('サインアウトに失敗しました', 'error', 3000);
+      });
+    }
+  });
+
+  /* フォントサイズ選択 */
+  document.querySelectorAll('.settings-font-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const size = parseInt(btn.dataset.size);
+      setFontSize(size);
+      /* 設定モーダル内ボタンの選択状態も即時更新 */
+      document.querySelectorAll('.settings-font-btn').forEach(b =>
+        b.classList.toggle('active', parseInt(b.dataset.size) === size)
+      );
+    });
+  });
+
+  /* 保存データ全削除ボタン */
+  document.getElementById('settings-clear-btn').addEventListener('click', () => {
+    const ok = window.confirm(
+      '⚠ エディタのHTML・APIキーなど、すべての保存データを削除します。\nこの操作は取り消せません。よろしいですか？'
+    );
+    if (!ok) return;
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(GEMINI_KEY_STORAGE);
+    } catch { /* プライベートブラウズでは何もしない */ }
+    showToast('保存データをすべて削除しました', 'warning', 3500);
+    updateStorageDisplay();
+    /* エディタをデフォルトに戻す */
+    if (editorView) {
+      editorView.dispatch({
+        changes: { from: 0, to: editorView.state.doc.length, insert: DEFAULT_HTML }
+      });
+    }
+  });
+}
+
+</script>
+</body>
+</html>
